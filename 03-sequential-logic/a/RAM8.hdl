@@ -27,6 +27,6 @@ CHIP RAM8 {
     Register(in=in, load=l6, out=r6);
     Register(in=in, load=l7, out=r7);
 
-    // 出力対象のレジスタをアドレスによって決定
+    // 出力対象のレジスタを決定
     Mux8Way16(a=r0, b=r1, c=r2, d=r3, e=r4, f=r5, g=r6, h=r7, sel=address, out=out);
 }
