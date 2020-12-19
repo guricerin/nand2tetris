@@ -28,15 +28,13 @@ CHIP Memory {
 
     PARTS:
     // load対象を決定
-    DMux(in=load, sel=address[14], a=ram-load, b=io-load);
-    Not(in=address[13], out=a);
-    And(a=io-load, b=a, out=screen-load);
+    DMux4Way(in=load, sel=address[13..14], a=ram-load0, b=ram-load1, c=screen-load, d=keyboard-load);
+    Or(a=ram-load0, b=ram-load1, out=ram-load);
 
     RAM16K(in=in, load=ram-load, address=address[0..13], out=ram-out);
     Screen(in=in, load=screen-load, address=address[0..12], out=screen-out);
     Keyboard(out=keyboard-out);
 
     // out対象を決定
-    Mux16(a=keyboard-out, b=screen-out, sel=screen-load, out=io-out);
-    Mux16(a=ram-out, b=io-out, sel=address[14], out=out);
+    Mux4Way16(a=ram-out, b=ram-out, c=screen-out, d=keyboard-out, sel=address[13..14], out=out);
 }
