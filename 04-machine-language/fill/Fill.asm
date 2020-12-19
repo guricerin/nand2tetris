@@ -32,7 +32,7 @@
     D;JEQ
 
 (FILL)
-    // if addr - lim > 0 then goto LOOP
+    // if addr - lim > 0 then goto LISTENER
     @addr
     D=M
     @lim
@@ -53,7 +53,7 @@
     0;JMP
 
 (CLEAR)
-    // if addr - lim > 0 then goto LOOP
+    // if addr - lim > 0 then goto LISTENER
     @addr
     D=M
     @lim
