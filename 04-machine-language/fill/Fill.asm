@@ -17,7 +17,7 @@
     @lim
     M=D
 
-(LOOP)
+(LISTENER)
     // addr = 16384 (screen's base address)
     @SCREEN
     D=A
@@ -37,7 +37,7 @@
     D=M
     @lim
     D=D-M // addr - lim
-    @LOOP
+    @LISTENER
     D;JGT
 
     // RAM[addr] = [1; 16]
@@ -58,7 +58,7 @@
     D=M
     @lim
     D=D-M // addr - lim
-    @LOOP
+    @LISTENER
     D;JGT
 
     // RAM[addr] = [0; 16]
