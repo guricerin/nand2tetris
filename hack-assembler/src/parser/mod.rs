@@ -12,8 +12,8 @@ use token::*;
 pub enum ParseError {
     #[error("unexpected token")]
     UnexpectedToken(Token),
-    #[error("redundant token")]
-    RedundantExpr(Token),
+    #[error("unexpected number")]
+    UnexpectedNum(Token),
     #[error("unexpected eof")]
     Eof,
 }
@@ -50,15 +50,6 @@ pub fn parse(tokens: Vec<Token>) -> Result<Commands, ParseError> {
     Ok(commands)
 }
 
-/// 先読み
-fn peek(tokens: &Vec<Token>, pos: usize) -> Option<Token> {
-    if tokens.len() <= pos {
-        None
-    } else {
-        Some(tokens[pos].clone())
-    }
-}
-
 /// `pos`のトークンが期待するものであれば、`pos`を1進める
 fn consume_token(
     tokens: &Vec<Token>,
@@ -66,7 +57,6 @@ fn consume_token(
     expect: TokenKind,
 ) -> Result<(TokenKind, usize), ParseError> {
     if tokens.len() <= pos {
-        // return Err(ParseError::eof(Loc::new(pos, pos)));
         return Err(ParseError::Eof);
     }
     let actual = tokens[pos].value.clone();
@@ -88,16 +78,15 @@ fn parse_acommand(tokens: &Vec<Token>, start: usize) -> Result<(Command, usize),
     let (_, pos) = consume_token(tokens, start, TokenKind::At)?;
     let _ = check_eof(tokens, pos)?;
     let actual = tokens[pos].clone();
+    let loc = Loc::new(start, 0).merge(&actual.loc);
     match actual.value {
         TokenKind::Number(n) => {
             let cmd = AddrCommand::num(n);
-            let loc = Loc::new(start, 0).merge(&actual.loc);
             let cmd = Command::addr(cmd, loc);
             Ok((cmd, pos + 1))
         }
         TokenKind::Symbol(s) => {
             let cmd = AddrCommand::symbol(&s);
-            let loc = Loc::new(start, 0).merge(&actual.loc);
             let cmd = Command::addr(cmd, loc);
             Ok((cmd, pos + 1))
         }
@@ -105,17 +94,124 @@ fn parse_acommand(tokens: &Vec<Token>, start: usize) -> Result<(Command, usize),
     }
 }
 
-fn parse_ccommand(tokens: &Vec<Token>, start: usize) -> Result<(Command, usize), ParseError> {
+fn parse_dest(tokens: &Vec<Token>, start: usize) -> Result<(Option<MemKind>, usize), ParseError> {
     let mut pos = start;
     let dest = match tokens[pos].value.clone() {
         TokenKind::Mem(m) => {
-            pos += 1;
-            let (_, p) = consume_token(tokens, pos, TokenKind::Eq)?;
-            pos = p;
-            Some(m)
+            match consume_token(tokens, pos + 1, TokenKind::Eq) {
+                Ok((_, p)) => {
+                    pos = p;
+                    Some(m)
+                }
+                // ロールバック
+                Err(_) => {
+                    pos = start;
+                    None
+                }
+            }
         }
         _ => None,
     };
+    Ok((dest, pos))
+}
+
+fn parse_roperand(tokens: &Vec<Token>, start: usize) -> Result<(Operand, usize), ParseError> {
+    let mut pos = start;
+    let _ = check_eof(tokens, pos)?;
+    let operand = match tokens[pos].value.clone() {
+        TokenKind::Mem(m) => Operand::mem(m),
+        TokenKind::Number(n) => match Constant::new(n) {
+            Some(c) => Operand::constant(c),
+            None => return Err(ParseError::UnexpectedNum(tokens[pos].clone())),
+        },
+        _ => return Err(ParseError::UnexpectedToken(tokens[pos].clone())),
+    };
+
+    pos += 1;
+    Ok((operand, pos))
+}
+
+fn consume_binop(tokens: &Vec<Token>, pos: usize) -> Result<(BinOp, usize), ParseError> {
+    match (
+        consume_token(tokens, pos, TokenKind::Plus),
+        consume_token(tokens, pos, TokenKind::Minus),
+        consume_token(tokens, pos, TokenKind::And),
+        consume_token(tokens, pos, TokenKind::Or),
+    ) {
+        (Ok((_, p)), _, _, _) => {
+            let binop = BinOp::add(Loc::new(pos, p));
+            Ok((binop, p))
+        }
+        (_, Ok((_, p)), _, _) => {
+            let binop = BinOp::sub(Loc::new(pos, p));
+            Ok((binop, p))
+        }
+        (_, _, Ok((_, p)), _) => {
+            let binop = BinOp::sub(Loc::new(pos, p));
+            Ok((binop, p))
+        }
+        (_, _, _, Ok((_, p))) => {
+            let binop = BinOp::sub(Loc::new(pos, p));
+            Ok((binop, p))
+        }
+        _ => Err(ParseError::UnexpectedToken(tokens[pos].clone())),
+    }
+}
+
+fn parse_comp(tokens: &Vec<Token>, start: usize) -> Result<(Comp, usize), ParseError> {
+    let mut pos = start;
+    let _ = check_eof(tokens, pos)?;
+
+    let comp = match tokens[pos].value.clone() {
+        // constant
+        TokenKind::Number(n) => {
+            if let Some(c) = Constant::new(n) {
+                pos += 1;
+                let loc = Loc::new(start, pos);
+                Comp::constant(c, loc)
+            } else {
+                return Err(ParseError::UnexpectedToken(tokens[pos].clone()));
+            }
+        }
+        // UniOp
+        TokenKind::Not => {
+            let (operand, p) = parse_roperand(tokens, pos + 1)?;
+            pos = p;
+            let loc = Loc::new(start, pos);
+            let uniop = UniOp::not(loc.clone());
+            Comp::uniop(uniop, operand, loc)
+        }
+        TokenKind::Minus => {
+            let (operand, p) = parse_roperand(tokens, pos + 1)?;
+            pos = p;
+            let loc = Loc::new(start, pos);
+            let uniop = UniOp::minus(loc.clone());
+            Comp::uniop(uniop, operand, loc)
+        }
+        // Mem or BinOp
+        TokenKind::Mem(m) => match consume_binop(tokens, pos + 1) {
+            Ok((binop, p)) => {
+                pos = p;
+                let (roperand, p) = parse_roperand(tokens, pos)?;
+                pos = p;
+                let loc = Loc::new(start, pos);
+                Comp::binop(binop, m, roperand, loc)
+            }
+            _ => {
+                pos += 1;
+                let loc = Loc::new(start, pos);
+                Comp::mem(m, loc)
+            }
+        },
+        _ => return Err(ParseError::UnexpectedToken(tokens[pos].clone())),
+    };
+
+    Ok((comp, pos))
+}
+
+fn parse_ccommand(tokens: &Vec<Token>, start: usize) -> Result<(Command, usize), ParseError> {
+    let pos = start;
+    let (dest, pos) = parse_dest(tokens, pos)?;
 
     let _ = check_eof(tokens, pos)?;
     let (comp, mut pos) = parse_comp(&tokens, pos)?;
@@ -140,29 +236,9 @@ fn parse_ccommand(tokens: &Vec<Token>, start: usize) -> Result<(Command, usize),
     };
 
     let cmd = CompCommand::new(dest, comp, jump);
-    todo!();
-    //Ok((cmd, pos))
-}
-
-fn parse_comp(tokens: &Vec<Token>, start: usize) -> Result<(Comp, usize), ParseError> {
-    let mut pos = start;
-    let _ = check_eof(tokens, pos)?;
-    let _ = match tokens[pos].value.clone() {
-        TokenKind::Number(n) => {
-            let n = if n == 0 {
-                Constant::Zero
-            } else if n == 1 {
-                Constant::One
-            } else {
-                return Err(ParseError::UnexpectedToken(tokens[pos].clone()));
-            };
-        }
-        TokenKind::Mem(m) => {}
-        TokenKind::Not => {}
-        TokenKind::Minus => {}
-        _ => return Err(ParseError::UnexpectedToken(tokens[pos].clone())),
-    };
-    todo!();
+    let loc = Loc::new(start, pos);
+    let cmd = Command::comp(cmd, loc);
+    Ok((cmd, pos))
 }
 
 fn parse_lcommand(tokens: &Vec<Token>, start: usize) -> Result<(Command, usize), ParseError> {
@@ -217,7 +293,6 @@ mod tests {
 
     #[test]
     fn test_parse_lcommand() {
-        // let tokens = lex("(LOOP)").unwrap();
         let tokens = lex("(LOOP)").unwrap();
         let (actual, _) = parse_lcommand(&tokens, 0).unwrap();
         let expect = LabelCommand::new("LOOP");
@@ -234,5 +309,41 @@ mod tests {
         assert!(parse_lcommand(&tokens, 0).is_err(), "unexpected keyword");
         let tokens = lex("(JGT)").unwrap();
         assert!(parse_lcommand(&tokens, 0).is_err(), "unexpected keyword");
+    }
+
+    #[test]
+    fn test_parse() {
+        let input = r###"
+    @i
+    M=1
+    @sum
+    M=0
+(LOOP)
+    @i
+    D=M
+    @100
+    D=D-A
+    @END
+    D;JGT
+    @i
+    D=M
+    @sum
+    M=D+M
+    @i
+    M=M+1
+    @LOOP
+    0;JMP
+(END)
+    @END
+    0;JMP
+        "###;
+        let tokens = lex(input).unwrap();
+        let actual: Vec<CommandKind> = parse(tokens)
+            .unwrap()
+            .iter()
+            .map(|t| t.value.clone())
+            .collect();
+        let expect = vec![];
+        assert_eq!(actual, expect);
     }
 }

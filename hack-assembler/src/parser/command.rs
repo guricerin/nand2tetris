@@ -32,7 +32,7 @@ pub enum UniOpKind {
     Not,
 }
 
-type UniOp = Annot<UniOpKind>;
+pub type UniOp = Annot<UniOpKind>;
 
 impl UniOp {
     pub fn minus(loc: Loc) -> Self {
@@ -51,19 +51,19 @@ pub enum BinOpKind {
     Or,
 }
 
-type BinOp = Annot<BinOpKind>;
+pub type BinOp = Annot<BinOpKind>;
 
 impl BinOp {
-    fn add(loc: Loc) -> Self {
+    pub fn add(loc: Loc) -> Self {
         Self::new(BinOpKind::Add, loc)
     }
-    fn sub(loc: Loc) -> Self {
+    pub fn sub(loc: Loc) -> Self {
         Self::new(BinOpKind::Sub, loc)
     }
-    fn and(loc: Loc) -> Self {
+    pub fn and(loc: Loc) -> Self {
         Self::new(BinOpKind::And, loc)
     }
-    fn or(loc: Loc) -> Self {
+    pub fn or(loc: Loc) -> Self {
         Self::new(BinOpKind::Or, loc)
     }
 }
@@ -72,6 +72,16 @@ impl BinOp {
 pub enum Constant {
     Zero,
     One,
+}
+
+impl Constant {
+    pub fn new(n: u64) -> Option<Self> {
+        match n {
+            0 => Some(Constant::Zero),
+            1 => Some(Constant::One),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -92,6 +102,7 @@ impl Operand {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CompKind {
     Constant(Constant),
+    Mem(MemKind),
     UniOp { op: UniOp, e: Operand },
     BinOp { op: BinOp, l: MemKind, r: Operand },
 }
@@ -101,6 +112,9 @@ pub type Comp = Annot<CompKind>;
 impl Comp {
     pub fn constant(c: Constant, loc: Loc) -> Self {
         Self::new(CompKind::Constant(c), loc)
+    }
+    pub fn mem(m: MemKind, loc: Loc) -> Self {
+        Self::new(CompKind::Mem(m), loc)
     }
     pub fn uniop(op: UniOp, e: Operand, loc: Loc) -> Self {
         let uniop = CompKind::UniOp { op: op, e: e };
