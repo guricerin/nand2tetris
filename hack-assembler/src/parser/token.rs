@@ -1,30 +1,14 @@
 use super::common::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum JumpKind {
-    Gt,
-    Eq,
-    Ge,
-    Lt,
-    Ne,
-    Le,
-    Jmp,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     /// [0-9]+
     Number(u64),
     /// D Register
-    DReg,
-    /// A Register
-    AReg,
-    /// M
-    Memory,
-    /// [a-zA-Z]
-    Symbol(String),
+    Mem(MemKind),
     /// jump
     Jump(JumpKind),
+    Symbol(String),
     /// @
     At,
     /// ;
@@ -53,14 +37,8 @@ impl Token {
     pub fn number(n: u64, loc: Loc) -> Self {
         Self::new(TokenKind::Number(n), loc)
     }
-    pub fn dreg(loc: Loc) -> Self {
-        Self::new(TokenKind::DReg, loc)
-    }
-    pub fn areg(loc: Loc) -> Self {
-        Self::new(TokenKind::AReg, loc)
-    }
-    pub fn memory(loc: Loc) -> Self {
-        Self::new(TokenKind::Memory, loc)
+    pub fn mem(m: MemKind, loc: Loc) -> Self {
+        Self::new(TokenKind::Mem(m), loc)
     }
     pub fn symbol(s: &str, loc: Loc) -> Self {
         Self::new(TokenKind::Symbol(s.to_string()), loc)

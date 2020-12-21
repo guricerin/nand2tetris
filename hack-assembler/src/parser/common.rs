@@ -19,12 +19,34 @@ impl Loc {
 /// アノテーション
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Annot<T> {
-    value: T,
-    loc: Loc,
+    pub value: T,
+    pub loc: Loc,
 }
 
 impl<T> Annot<T> {
     pub fn new(value: T, loc: Loc) -> Self {
         Self { value, loc }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MemKind {
+    M, // Memory
+    D, // D Register
+    A, // A Register
+    MD,
+    AM,
+    AD,
+    AMD,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum JumpKind {
+    Gt,
+    Eq,
+    Ge,
+    Lt,
+    Ne,
+    Le,
+    Jmp,
 }

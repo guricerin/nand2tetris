@@ -1,3 +1,4 @@
+use super::types::Address;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -8,8 +9,6 @@ pub enum SymTableError {
     #[error("available address reach the upper limit.\tsymbol: {0}\taddress: {1}")]
     AddressLimit(String, Address),
 }
-
-pub type Address = u16;
 
 const AVAILABLE_ADDRESS_END: Address = 0x4000;
 

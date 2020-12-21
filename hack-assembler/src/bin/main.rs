@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 #[derive(Clap, Debug)]
 #[clap(name = env!("CARGO_BIN_NAME"), version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"))]
 struct Opts {
-    #[clap(name = ".asm file")]
+    #[clap(name = ".asm FILE")]
     asm_path: PathBuf,
 }
 
@@ -18,7 +18,7 @@ fn ensure_asm_file(path: &Path) -> Result<OsString> {
         .and_then(OsStr::to_str)
         .and_then(|ext| match ext {
             "asm" => {
-                let stem = path.file_stem().unwrap();
+                let stem = path.file_stem()?;
                 let mut filename = stem.to_os_string();
                 filename.push(".hack");
                 Some(filename)

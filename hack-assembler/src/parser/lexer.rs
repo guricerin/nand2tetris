@@ -134,9 +134,15 @@ fn lex_ident(input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
 
     // キーワードとユーザ定義シンボルの識別
     let token = match ident {
-        "D" => Token::dreg(loc),
-        "A" => Token::areg(loc),
-        "M" => Token::memory(loc),
+        // memory or register
+        "M" => Token::mem(MemKind::M, loc),
+        "D" => Token::mem(MemKind::D, loc),
+        "A" => Token::mem(MemKind::A, loc),
+        "MD" => Token::mem(MemKind::MD, loc),
+        "AM" => Token::mem(MemKind::AM, loc),
+        "AD" => Token::mem(MemKind::AD, loc),
+        "AMD" => Token::mem(MemKind::AMD, loc),
+        // jump
         "JGT" => Token::jump(JumpKind::Gt, loc),
         "JEQ" => Token::jump(JumpKind::Eq, loc),
         "JGE" => Token::jump(JumpKind::Ge, loc),
@@ -144,6 +150,7 @@ fn lex_ident(input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
         "JNE" => Token::jump(JumpKind::Ne, loc),
         "JLE" => Token::jump(JumpKind::Le, loc),
         "JMP" => Token::jump(JumpKind::Jmp, loc),
+        // symbol
         _ => Token::symbol(ident, loc),
     };
 
@@ -158,10 +165,6 @@ fn skip_spaces(input: &[u8], start: usize) -> Result<((), usize), LexError> {
 fn skip_comment(input: &[u8], start: usize) -> Result<((), usize), LexError> {
     let pos = recognize_many(input, start, |b| b != b'\n');
     Ok(((), pos))
-}
-
-fn lex_dreg(input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
-    consume_byte(input, start, b'D').map(|(_, end)| (Token::dreg(Loc::new(start, end)), end))
 }
 
 fn lex_at(input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
@@ -211,11 +214,19 @@ mod tests {
     #[test]
     fn test_lex_memory() {
         let tokens = lex("D").unwrap();
-        assert_eq!(tokens, vec![Token::dreg(Loc::new(0, 1))]);
+        assert_eq!(tokens, vec![Token::mem(MemKind::D, Loc::new(0, 1))]);
         let tokens = lex("A").unwrap();
-        assert_eq!(tokens, vec![Token::areg(Loc::new(0, 1))]);
+        assert_eq!(tokens, vec![Token::mem(MemKind::A, Loc::new(0, 1))]);
         let tokens = lex("M").unwrap();
-        assert_eq!(tokens, vec![Token::memory(Loc::new(0, 1))]);
+        assert_eq!(tokens, vec![Token::mem(MemKind::M, Loc::new(0, 1))]);
+        let tokens = lex("MD").unwrap();
+        assert_eq!(tokens, vec![Token::mem(MemKind::MD, Loc::new(0, 2))]);
+        let tokens = lex("AM").unwrap();
+        assert_eq!(tokens, vec![Token::mem(MemKind::AM, Loc::new(0, 2))]);
+        let tokens = lex("AD").unwrap();
+        assert_eq!(tokens, vec![Token::mem(MemKind::AD, Loc::new(0, 2))]);
+        let tokens = lex("AMD").unwrap();
+        assert_eq!(tokens, vec![Token::mem(MemKind::AMD, Loc::new(0, 3))]);
     }
 
     #[test]
@@ -302,9 +313,9 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::areg(Loc::new(0, 1)),
+                Token::mem(MemKind::A, Loc::new(0, 1)),
                 Token::or(Loc::new(1, 2)),
-                Token::dreg(Loc::new(2, 3)),
+                Token::mem(MemKind::D, Loc::new(2, 3)),
             ]
         );
 
@@ -370,6 +381,8 @@ mod tests {
     fn test_lex_space() {
         let input = r###"
         //
+        ///
+        ////
         // //  //
             //
         "###;
