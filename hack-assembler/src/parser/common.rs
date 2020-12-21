@@ -19,8 +19,8 @@ impl Loc {
 /// アノテーション
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Annot<T> {
-    pub value: T,
-    pub loc: Loc,
+    value: T,
+    loc: Loc,
 }
 
 impl<T> Annot<T> {
