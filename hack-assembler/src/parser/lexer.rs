@@ -346,35 +346,6 @@ mod tests {
         assert_eq!(tokens, vec![Token::number(1000, Loc::new(0, 4))]);
         let input = "100 / hoge kaokokok 4567uhgy7ik";
         assert!(lex(input).is_err());
-
-        // let input = r###"
-        //     D|M
-        //     // D+M
-        //     D=D+1 // D=D-1
-        //     0;JMP
-        // @hoge
-        //         A=M
-        // //"###;
-        // let tokens = lex(input).unwrap();
-        // assert_eq!(
-        //     tokens,
-        //     vec![
-        //         Token::dreg(Loc::new(0, 1)),
-        //         Token::or(Loc::new(1, 0)),
-        //         Token::memory(Loc::new(0, 1)),
-        //         Token::dreg(Loc::new(0, 1)),
-        //         Token::eq(Loc::new(0, 1)),
-        //         Token::number(1, Loc::new(1, 5)),
-        //         Token::number(0, Loc::new(0, 1)),
-        //         Token::semicolon(Loc::new(1, 2)),
-        //         Token::jump(JumpKind::Jmp, Loc::new(2, 5)),
-        //         Token::at(Loc::new(1, 2)),
-        //         Token::symbol("hoge", Loc::new(1, 5)),
-        //         Token::areg(Loc::new(0, 1)),
-        //         Token::eq(Loc::new(0, 1)),
-        //         Token::memory(Loc::new(0, 1)),
-        //     ]
-        // );
     }
 
     #[test]

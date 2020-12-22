@@ -1,4 +1,4 @@
 pub mod code;
-pub mod parser;
-pub mod sysmbol_table;
+mod parser;
+mod sysmbol_table;
 mod types;

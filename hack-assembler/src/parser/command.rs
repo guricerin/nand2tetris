@@ -1,5 +1,4 @@
 use super::common::*;
-use crate::types::Address;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NumOrSymbol {
@@ -7,9 +6,11 @@ pub enum NumOrSymbol {
     Symbol(String),
 }
 
+/// A命令
+/// ex: @hoge, @42
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AddrCommand {
-    value: NumOrSymbol,
+    pub value: NumOrSymbol,
 }
 
 impl AddrCommand {
@@ -126,11 +127,13 @@ impl Comp {
     }
 }
 
+/// C命令
+/// ex: dest=comp;jump
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CompCommand {
-    dest: Option<MemKind>,
-    comp: Comp,
-    jump: Option<JumpKind>,
+    pub dest: Option<MemKind>,
+    pub comp: Comp,
+    pub jump: Option<JumpKind>,
 }
 
 impl CompCommand {
@@ -145,9 +148,11 @@ impl CompCommand {
     }
 }
 
+/// 疑似命令
+/// ex: (LOOP)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LabelCommand {
-    label: String,
+    pub label: String,
 }
 
 impl LabelCommand {
@@ -155,6 +160,9 @@ impl LabelCommand {
         Self {
             label: label.to_string(),
         }
+    }
+    pub fn label(&self) -> String {
+        self.label.clone()
     }
 }
 
@@ -176,5 +184,8 @@ impl Command {
     }
     pub fn label(cmd: LabelCommand, loc: Loc) -> Self {
         Self::new(CommandKind::L(cmd), loc)
+    }
+    pub fn cmd_type(&self) -> &CommandKind {
+        &self.value
     }
 }

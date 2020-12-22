@@ -1,4 +1,7 @@
 use super::types::Address;
+use crate::parser::command::*;
+use crate::parser::common::*;
+
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -6,8 +9,8 @@ use thiserror::Error;
 pub enum SymTableError {
     #[error("symbol <{0}> is already defined.")]
     AlreadyDefined(String),
-    #[error("available address reach the upper limit.\tsymbol: {0}\taddress: {1}")]
-    AddressLimit(String, Address),
+    #[error("available address reach the upper limit.")]
+    AddressLimit,
 }
 
 const AVAILABLE_ADDRESS_END: Address = 0x4000;
@@ -42,22 +45,69 @@ impl SymbolTable {
         }
     }
 
-    pub fn add_entry(&mut self, symbol: &str, address: Address) -> Result<(), SymTableError> {
-        if self.vacant >= AVAILABLE_ADDRESS_END {
-            return Err(SymTableError::AddressLimit(symbol.to_string(), self.vacant));
+    pub fn get_address(&self, symbol: &str) -> Option<&Address> {
+        self.table.get(&symbol.to_string())
+    }
+
+    pub fn resolve(&mut self, commands: &Vec<Command>) -> Result<(), SymTableError> {
+        let mut line_num: Address = 0;
+        for c in commands.iter() {
+            match c {
+                Annot {
+                    value: CommandKind::L(LabelCommand { label, .. }),
+                    ..
+                } => {
+                    self.add_label(&label, line_num)?;
+                }
+                _ => {
+                    line_num += 1;
+                }
+            }
+        }
+        for c in commands.iter() {
+            match c {
+                Annot {
+                    value:
+                        CommandKind::A(AddrCommand {
+                            value: NumOrSymbol::Symbol(symbol),
+                            ..
+                        }),
+                    ..
+                } => {
+                    self.add_symbol(&symbol)?;
+                }
+                _ => (),
+            }
         }
 
-        self.table.entry(symbol.to_string()).or_insert(address);
-        self.vacant += 1;
         Ok(())
     }
 
-    pub fn contains(&self, symbol: &str) -> bool {
-        self.table.contains_key(&symbol.to_string())
+    fn check_address_limit(&self) -> Result<(), SymTableError> {
+        if self.vacant >= AVAILABLE_ADDRESS_END {
+            Err(SymTableError::AddressLimit)
+        } else {
+            Ok(())
+        }
     }
 
-    pub fn get_address(&self, symbol: &str) -> Option<&Address> {
-        self.table.get(&symbol.to_string())
+    fn add_symbol(&mut self, symbol: &str) -> Result<(), SymTableError> {
+        self.check_address_limit()?;
+
+        let vacant = &mut self.vacant;
+        self.table.entry(symbol.to_string()).or_insert_with(|| {
+            let address = vacant.clone();
+            *vacant += 1;
+            address
+        });
+        Ok(())
+    }
+
+    fn add_label(&mut self, label: &str, address: Address) -> Result<(), SymTableError> {
+        self.check_address_limit()?;
+
+        self.table.entry(label.to_string()).or_insert(address);
+        Ok(())
     }
 }
 
@@ -65,20 +115,16 @@ impl SymbolTable {
 mod tests {
     use super::*;
 
-    /// available address should be within [0x000f .. 0x3fff]
     #[test]
     fn test_add_entry_limit() {
         let mut table = SymbolTable::new();
         for i in 16..AVAILABLE_ADDRESS_END {
             let s = format!("a{}", i);
-            let actual = table.add_entry(&s, i);
+            let actual = table.add_symbol(&s);
             assert!(actual.is_ok());
         }
 
-        let actual = table.add_entry("hoge", AVAILABLE_ADDRESS_END);
-        assert!(
-            actual.is_err(),
-            "available address should reach the upper limit"
-        );
+        let actual = table.add_symbol("hoge");
+        assert!(actual.is_err(), "available address reached the upper limit");
     }
 }
