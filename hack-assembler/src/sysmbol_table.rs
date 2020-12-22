@@ -7,8 +7,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SymTableError {
-    #[error("symbol <{0}> is already defined.")]
-    AlreadyDefined(String),
     #[error("available address reach the upper limit.")]
     AddressLimit,
 }

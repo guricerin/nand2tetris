@@ -1,3 +1,5 @@
+use std::fmt;
+
 /// 位置情報
 /// ex: Loc(4, 6) => 入力文字の4文字目から6文字目までの区間 (0-indexed)
 /// [4..6) 半開区間
@@ -13,6 +15,12 @@ impl Loc {
     pub fn merge(&self, other: &Loc) -> Self {
         use std::cmp::{max, min};
         Self(min(self.0, other.0), max(self.1, other.1))
+    }
+}
+
+impl fmt::Display for Loc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}-{}", self.0, self.1)
     }
 }
 
@@ -40,6 +48,20 @@ pub enum MemKind {
     AMD,
 }
 
+impl fmt::Display for MemKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::MemKind::*;
+        match self {
+            M => write!(f, "M memory"),
+            D => write!(f, "D register"),
+            A => write!(f, "A register"),
+            MD => write!(f, "MD"),
+            AM => write!(f, "AM"),
+            AD => write!(f, "AD"),
+            AMD => write!(f, "AMD"),
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum JumpKind {
     Gt,
@@ -49,4 +71,19 @@ pub enum JumpKind {
     Ne,
     Le,
     Jmp,
+}
+
+impl fmt::Display for JumpKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::JumpKind::*;
+        match self {
+            Gt => write!(f, "JGT"),
+            Eq => write!(f, "JEQ"),
+            Ge => write!(f, "JGE"),
+            Lt => write!(f, "JLT"),
+            Ne => write!(f, "JNE"),
+            Le => write!(f, "JLE"),
+            Jmp => write!(f, "JMP"),
+        }
+    }
 }

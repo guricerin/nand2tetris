@@ -1,4 +1,5 @@
 use super::common::*;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenKind {
@@ -29,6 +30,28 @@ pub enum TokenKind {
     LParen,
     /// )
     RParen,
+}
+
+impl fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::TokenKind::*;
+        match self {
+            Number(n) => n.fmt(f),
+            Mem(m) => m.fmt(f),
+            Jump(j) => j.fmt(f),
+            Symbol(s) => s.fmt(f),
+            Plus => write!(f, "+"),
+            Minus => write!(f, "-"),
+            And => write!(f, "&"),
+            Or => write!(f, "|"),
+            Not => write!(f, "!"),
+            Eq => write!(f, "="),
+            At => write!(f, "@"),
+            Semicolon => write!(f, ";"),
+            LParen => write!(f, "("),
+            RParen => write!(f, ")"),
+        }
+    }
 }
 
 pub type Token = Annot<TokenKind>;

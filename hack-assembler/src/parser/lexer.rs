@@ -1,13 +1,28 @@
 use super::common::*;
 use super::token::*;
+use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LexErrorKind {
+    #[error("")]
     InvalidChar(char),
+    #[error("eof")]
     Eof,
 }
 
 pub type LexError = Annot<LexErrorKind>;
+
+impl fmt::Display for LexError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::LexErrorKind::*;
+        let loc = &self.loc;
+        match self.value {
+            InvalidChar(c) => write!(f, "{}: invalid char '{}'", loc, c),
+            Eof => write!(f, "End of file"),
+        }
+    }
+}
 
 impl LexError {
     fn invalid_char(c: char, loc: Loc) -> Self {

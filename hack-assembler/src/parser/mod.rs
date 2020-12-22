@@ -313,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore] // 面倒くさい
     fn test_parse() {
         let input = r###"
     @i
