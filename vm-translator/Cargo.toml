@@ -1,0 +1,16 @@
+[package]
+name = "vm-translator"
+version = "0.1.0"
+authors = ["guricerin <chanbo1e9@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "vmtranslate"
+path = "src/bin/main.rs"
+
+[dependencies]
+anyhow = "1.0.36"
+clap = "3.0.0-beta.2"
+thiserror = "1.0.22"
