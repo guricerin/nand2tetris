@@ -1,8 +1,9 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Clap;
-use std::fs::{self, File};
-use std::io::{BufWriter, Write};
+use std::fs;
+// use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+use vm_translator::Translator;
 
 #[derive(Clap, Debug)]
 #[clap(name = env!("CARGO_BIN_NAME"), version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"))]
@@ -47,6 +48,8 @@ fn main() -> Result<()> {
         let _ = ensure_vm_file(&vm_path)?;
         (vec![vm_path.clone()], vm_path.with_extension("asm"))
     };
+
+    Translator::run(&vm_paths, &asm_path)?;
 
     println!("{:?}", vm_paths);
     println!("{:?}", asm_path);

@@ -27,17 +27,21 @@ impl TranslateError {
     }
 }
 
-struct Translator {
+pub struct Translator {
     vm_files: Vec<PathBuf>,
 }
 
 impl Translator {
-    fn new(vm_files: Vec<PathBuf>) -> Self {
-        Self { vm_files: vm_files }
-    }
+    // fn new(vm_files: Vec<PathBuf>) -> Self {
+    //     Self { vm_files: vm_files }
+    // }
 
-    pub fn run(vm_paths: Vec<PathBuf>, out_path: &Path) -> Result<(), TranslateError> {
+    pub fn run(vm_paths: &Vec<PathBuf>, out_path: &Path) -> Result<(), TranslateError> {
         // let trans = Self::new(vm_files);
+        if vm_paths.is_empty() {
+            return Err(TranslateError::etc("not found .vm file"));
+        }
+
         let mut writer = BufWriter::new(File::create(out_path)?);
         for vm_path in vm_paths.iter() {
             let vm_code = fs::read_to_string(vm_path)?;
@@ -48,8 +52,8 @@ impl Translator {
             let vm_filename = vm_filename
                 .to_str()
                 .ok_or(TranslateError::etc("failed to convert OsStr to &str"))?;
-            let asm_code = codegen::CodeGenerator::run(vm_filename, cmds)?;
-            writer.write_all(asm_code.as_bytes())?;
+            let asm_code = codegen::CodeGenerator::run(vm_filename, &cmds)?;
+            writer.write(asm_code.as_bytes())?;
         }
         Ok(())
     }
