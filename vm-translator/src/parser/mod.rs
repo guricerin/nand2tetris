@@ -1,9 +1,8 @@
-mod arithmetic;
-mod flow;
-mod func;
-mod mem_access;
-mod segment;
-mod stack;
+pub mod arithmetic;
+pub mod flow;
+pub mod func;
+pub mod mem_access;
+pub mod segment;
 
 use arithmetic::*;
 use flow::*;
@@ -19,7 +18,7 @@ pub enum ParseError {
     #[error("lack tokens: {0}")]
     LackTokens(String),
     #[error("redundant tokens: {0}")]
-    RedundantToken(String),
+    RedundantTokens(String),
     #[error(transparent)]
     ParseNum(#[from] std::num::ParseIntError),
     #[error("end of file")]
@@ -36,7 +35,7 @@ impl ParseError {
     }
     pub fn redundant_tokens(tokens: &Vec<&str>) -> Self {
         let tokens = tokens.join(" ");
-        Self::RedundantToken(tokens)
+        Self::RedundantTokens(tokens)
     }
 }
 
@@ -57,14 +56,6 @@ impl Command {
     }
 }
 
-macro_rules! parse_arithmetic {
-    ($tokens:expr, $arith:expr) => {{
-        let _ = check_tokens_num($tokens, 1)?;
-        let cmd = Command::Arithmetic($arith);
-        Ok(cmd)
-    }};
-}
-
 pub fn parse(input: &str) -> Result<Vec<Command>, ParseError> {
     let lines = input.lines().collect::<Vec<&str>>();
     let mut cmds = vec![];
@@ -76,6 +67,14 @@ pub fn parse(input: &str) -> Result<Vec<Command>, ParseError> {
         }
     }
     Ok(cmds)
+}
+
+macro_rules! parse_arithmetic {
+    ($tokens:expr, $arith:expr) => {{
+        let _ = check_tokens_num($tokens, 1)?;
+        let cmd = Command::Arithmetic($arith);
+        Ok(cmd)
+    }};
 }
 
 fn parse_line(tokens: &Vec<&str>) -> Result<Command, ParseError> {
