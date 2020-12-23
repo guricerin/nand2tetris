@@ -43,6 +43,7 @@ impl Translator {
         }
 
         let mut writer = BufWriter::new(File::create(out_path)?);
+        writer.write(codegen::CodeGenerator::init_code().as_bytes())?;
         for vm_path in vm_paths.iter() {
             let vm_code = fs::read_to_string(vm_path)?;
             let cmds = parser::parse(&vm_code)?;
