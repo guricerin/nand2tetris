@@ -18,7 +18,7 @@ M=D
 pub fn push_from_d() -> String {
     // スタックにプッシュ
     // @SPの参照先にDを入れた後、@SP自体をインクリメント
-    let code = r#"// push
+    let code = r#"// push from d
 @SP     // *SP = D
 A=M
 M=D
@@ -30,7 +30,7 @@ M=M+1
 
 /// ポップしたデータをDレジスタに格納
 pub fn pop_to_d() -> String {
-    let code = r#"
+    let code = r#"// pop to d
 @SP     //
 AM=M-1  // SP--
 D=M     // D = *SP

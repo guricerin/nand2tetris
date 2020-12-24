@@ -137,23 +137,22 @@ M={}M   // *(ptr) = op *(ptr)
         let break_label = format!("_IF_BLOCK_BREAK_{}_{}_", &filename, self.if_label_id);
         self.if_label_id += 1;
         let code = format!(
-            r#"
+            r#"// jump
 {0}
-A=A-1 // ptr = ptr - 1
+A=A-1 // ptr--
 D=M-D // lhs - rhs
 @{1}
 D;{6} // compare D to 0: true -> jump to TRUE false -> jump to FALSE
-({2})
-@SP
-A=M
-M={3} // *SP = false
+({2}) // FALSE block
+D={3} // D = false
 @{5}
 0;JMP // jump to BREAK
-({1})
-@SP
-A=M
-M={4} // *SP = true
+({1}) // TRUE block
+D={4} // D = true
 ({5}) // BREAK
+@SP
+M=M-1 // SP-- (lhsが格納されていたアドレスに条件式の結果を突っ込むため)
+{7}
 "#,
             idiom::pop_to_d(),
             true_label,
@@ -161,7 +160,8 @@ M={4} // *SP = true
             VmBool::False as i32,
             VmBool::True as i32,
             break_label,
-            jmp
+            jmp,
+            idiom::push_from_d()
         );
         Ok(code)
     }

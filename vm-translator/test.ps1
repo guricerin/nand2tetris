@@ -33,8 +33,8 @@ function main() {
     # cargo test
     run-cargo "test"
 
-    # cargo build
-    run-cargo "build --release"
+    # # cargo build
+    # run-cargo "build --release"
 
     $successes = @()
     $fails = @()
@@ -42,7 +42,7 @@ function main() {
     @(
         "../07-vm1-stack-arithmetic/StackArithmetic/SimpleAdd"
         "../07-vm1-stack-arithmetic/StackArithmetic/StackTest"
-        # "../07-vm1-stack-arithmetic/MemoryAccess/BasicTest"
+        "../07-vm1-stack-arithmetic/MemoryAccess/BasicTest"
         # "../07-vm1-stack-arithmetic/MemoryAccess/PointerTest"
         # "../07-vm1-stack-arithmetic/MemoryAccess/StaticTest"
     ) | ForEach-Object {
