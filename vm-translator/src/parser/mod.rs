@@ -21,8 +21,6 @@ pub enum ParseError {
     RedundantTokens(String),
     #[error(transparent)]
     ParseNum(#[from] std::num::ParseIntError),
-    #[error("end of file")]
-    Eof,
 }
 
 impl ParseError {

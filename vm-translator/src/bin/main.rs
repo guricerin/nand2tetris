@@ -3,7 +3,7 @@ use clap::Clap;
 use std::fs;
 // use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-use vm_translator::Translator;
+use vm_translator;
 
 #[derive(Clap, Debug)]
 #[clap(name = env!("CARGO_BIN_NAME"), version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"))]
@@ -49,6 +49,6 @@ fn main() -> Result<()> {
         (vec![vm_path.clone()], vm_path.with_extension("asm"))
     };
 
-    Translator::run(&vm_paths, &asm_path)?;
+    vm_translator::run(&vm_paths, &asm_path)?;
     Ok(())
 }

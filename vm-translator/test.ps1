@@ -1,7 +1,6 @@
 #requires -version 7
 Set-StrictMode -Version Latest
 
-$PSScriptRoot | Set-Variable -Name SCRIPT_ROOT -Option Constant
 Join-Path $PSScriptRoot "../../tools/CPUEmulator.bat" | Set-Variable -Name TEST_SCRIPT -Option Constant
 
 function print-result([bool] $success, $msg) {
@@ -17,7 +16,7 @@ function print-result([bool] $success, $msg) {
 function test ($path) {
     $target_dir = Join-Path $PSScriptRoot $path
     $name = Split-Path $target_dir -Leaf
-    Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run -- $target_dir" -Wait -NoNewWindow
+    Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run --release -- $target_dir" -Wait -NoNewWindow
 
     return cmd.exe /c $TEST_SCRIPT $target_dir/$name.tst
 }
@@ -25,7 +24,7 @@ function test ($path) {
 function run-cargo($arg) {
     $cmd = "cargo"
     # Invoke-Expressionは非同期実行しかできず戻り値を取得できないので、これをつかう
-    $proc = Start-Process $cmd -WorkingDirectory $PSScriptRoot -ArgumentList $arg -Wait -NoNewWindow -PassThru
+    $proc = Start-Process $cmd -WorkingDirectory $PSScriptRoot -ArgumentList $arg -Wait -PassThru -NoNewWindow
     $res = $proc.ExitCode -eq 0
     print-result -success $res "$cmd $arg"
 }
@@ -35,7 +34,7 @@ function main() {
     run-cargo "test"
 
     # cargo build
-    run-cargo "build"
+    run-cargo "build --release"
 
     $successes = @()
     $fails = @()
@@ -43,9 +42,9 @@ function main() {
     @(
         "../07-vm1-stack-arithmetic/StackArithmetic/SimpleAdd"
         "../07-vm1-stack-arithmetic/StackArithmetic/StackTest"
-        "../07-vm1-stack-arithmetic/MemoryAccess/BasicTest"
-        "../07-vm1-stack-arithmetic/MemoryAccess/PointerTest"
-        "../07-vm1-stack-arithmetic/MemoryAccess/StaticTest"
+        # "../07-vm1-stack-arithmetic/MemoryAccess/BasicTest"
+        # "../07-vm1-stack-arithmetic/MemoryAccess/PointerTest"
+        # "../07-vm1-stack-arithmetic/MemoryAccess/StaticTest"
     ) | ForEach-Object {
         $res = test -path $_
         if ($res) {

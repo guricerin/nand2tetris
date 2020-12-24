@@ -1,3 +1,7 @@
+mod idiom;
+mod vm_bool;
+use vm_bool::*;
+
 use crate::parser::*;
 use arithmetic::*;
 use flow::*;
@@ -9,39 +13,43 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CodeGenError {
-    #[error("todo")]
-    Hoge,
+    #[error("uninitialize file name")]
+    UninitializeFileName,
 }
 
 pub struct CodeGenerator {
     /// without ext
-    filename: String,
+    filename: Option<String>,
+    if_label_id: usize,
 }
 
 impl CodeGenerator {
     pub fn init_code() -> String {
-        // SP: RAM[0]に格納。値はRAM[256..2047]へのpointer
-        let code = r#"// initialize
-@256
-D=A
-@SP
-M=D
-"#;
-        code.to_owned()
+        idiom::INITIALIZE.to_string()
     }
 
-    fn new(filename: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            filename: filename.to_string(),
+            filename: None,
+            if_label_id: 0,
         }
     }
 
-    pub fn run(filename: &str, cmds: &Vec<Command>) -> Result<String, CodeGenError> {
-        let generator = Self::new(filename);
-        generator.generate(cmds)
+    pub fn run(&mut self, filename: &str, cmds: &Vec<Command>) -> Result<String, CodeGenError> {
+        self.filename = Some(filename.to_owned());
+        self.if_label_id = 0;
+        self.generate(cmds)
     }
 
-    fn generate(&self, cmds: &Vec<Command>) -> Result<String, CodeGenError> {
+    fn get_filename(&self) -> Result<String, CodeGenError> {
+        let filename = self
+            .filename
+            .clone()
+            .ok_or(CodeGenError::UninitializeFileName)?;
+        Ok(filename)
+    }
+
+    fn generate(&mut self, cmds: &Vec<Command>) -> Result<String, CodeGenError> {
         let mut buf = String::new();
         for cmd in cmds.iter() {
             match cmd {
@@ -66,41 +74,96 @@ M=D
         Ok(buf)
     }
 
-    fn arithmetic(&self, cmd: &Arithmetic) -> Result<String, CodeGenError> {
+    fn arithmetic(&mut self, cmd: &Arithmetic) -> Result<String, CodeGenError> {
         use arithmetic::Arithmetic::*;
-        // todo: fix
         let code = match cmd {
+            // x + y
             // M+D はない
             Add => self.binary_op("M=D+M"),
-            // Sub => "M-D\n",
-            // Neg => "-M\n",
-            // Eq => "JEQ\n",
-            // Gt => "JGT\n",
-            // Lt => "JLT\n",
-            // // M&D はない
-            // And => "D&M\n",
-            // // M|D はない
-            // Or => "D|M\n",
-            // Not => "!M\n",
-            _ => todo!(),
+            // x - y
+            Sub => self.binary_op("M=M-D"),
+            // -x
+            Neg => self.unary_op("-"),
+            // x == y
+            Eq => self.jump("JEQ")?,
+            // x > y
+            Gt => self.jump("JGT")?,
+            // x < y
+            Lt => self.jump("JLT")?,
+            // x & y
+            // M&D はない
+            And => self.binary_op("M=D&M"),
+            // x or y
+            // M|D はない
+            Or => self.binary_op("M=D|M"),
+            // !x
+            Not => self.unary_op("!"),
         };
-        Ok(code.to_string())
+        Ok(code)
     }
 
-    fn binary_op(&self, op: &str) -> String {
+    fn binary_op(&self, expr: &str) -> String {
         // スタックからrightをポップ
         // スタックの頂点(left)を left op right に書き換える
         // A=A-1 は、RAM[@SP]を-1するわけではない
         format!(
             r#"// binary op
 @SP
-AM=M-1
-D=M
-A=A-1
-{}
-        "#,
+AM=M-1 // SP--
+D=M    // D = *SP
+A=A-1  // ptr = SP - 1
+{}     // *(ptr) = *(ptr) op D
+"#,
+            expr
+        )
+    }
+
+    fn unary_op(&self, op: &str) -> String {
+        format!(
+            r#"// unary op
+@SP     // ptr = SP
+A=A-1   // ptr = ptr - 1
+M={}M   // *(ptr) = op *(ptr)
+"#,
             op
         )
+    }
+
+    fn jump(&mut self, jmp: &str) -> Result<String, CodeGenError> {
+        let filename = self.get_filename()?;
+        let true_label = format!("_COND_TRUE_{}_{}_", &filename, self.if_label_id);
+        // 実はfalse_labelは不要だが、見やすくするために挿入
+        let false_label = format!("_COND_FALSE_{}_{}_", &filename, self.if_label_id);
+        let break_label = format!("_IF_BLOCK_BREAK_{}_{}_", &filename, self.if_label_id);
+        self.if_label_id += 1;
+        let code = format!(
+            r#"
+{0}
+A=A-1 // ptr = ptr - 1
+D=M-D // lhs - rhs
+@{1}
+D;{6} // compare D to 0: true -> jump to TRUE false -> jump to FALSE
+({2})
+@SP
+A=M
+M={3} // *SP = false
+@{5}
+0;JMP // jump to BREAK
+({1})
+@SP
+A=M
+M={4} // *SP = true
+({5}) // BREAK
+"#,
+            idiom::pop_to_d(),
+            true_label,
+            false_label,
+            VmBool::False as i32,
+            VmBool::True as i32,
+            break_label,
+            jmp
+        );
+        Ok(code)
     }
 
     fn mem_access(&self, cmd: &MemAccess) -> Result<String, CodeGenError> {
@@ -120,12 +183,13 @@ A=A-1
             Local => todo!(),
             // 現在翻訳中のjackファイルのスタティック変数
             Static => {
+                let filename = self.get_filename()?;
                 format!(
                     r#"// static <n>
 @{}.{}
 D=M
 "#,
-                    self.filename, index
+                    filename, index
                 )
             }
             // constantはRAMに割り当てられていないので、indexを単なる定数値として扱う
@@ -143,23 +207,29 @@ D=A
             Pointer => todo!(),
             Temp => todo!(),
         };
-        // スタックにプッシュ
-        // @SPの参照先にDを入れた後、@SP自体をインクリメント
-        let code1 = r#"// push
-@SP // *SP=D
-A=M
-M=D
-@SP // SP++
-M=M+1
-"#;
+        let code1 = idiom::push_from_d();
         let code = format!("{}{}", code0, code1);
         Ok(code)
     }
 
     /// スタックからポップしたデータをsegment[index]に格納
     fn pop(&self, segment: &Segment, index: u16) -> Result<String, CodeGenError> {
-        use segment::Segment::*;
         todo!();
+        use segment::Segment::*;
+
+        let code0 = idiom::pop_to_d();
+        let code1 = match segment {
+            Arg => todo!(),
+            Local => todo!(),
+            Static => todo!(),
+            Constant => todo!(),
+            This => todo!(),
+            That => todo!(),
+            Pointer => todo!(),
+            Temp => todo!(),
+        };
+        let code = format!("{}{}", code0, "");
+        Ok(code)
     }
 
     fn flow(&self, cmd: &Flow) -> Result<String, CodeGenError> {
