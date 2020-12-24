@@ -122,7 +122,7 @@ A=A-1  // ptr = SP - 1
         format!(
             r#"// unary op
 @SP     // ptr = SP
-A=A-1   // ptr = ptr - 1
+A=M-1   // ptr = ptr - 1
 M={}M   // *(ptr) = op *(ptr)
 "#,
             op
