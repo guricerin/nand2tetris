@@ -1,5 +1,6 @@
 mod idiom;
 mod vm_bool;
+
 use vm_bool::*;
 
 use crate::parser::*;
@@ -15,6 +16,8 @@ use thiserror::Error;
 pub enum CodeGenError {
     #[error("uninitialize file name")]
     UninitializeFileName,
+    #[error("unnamed segment")]
+    UnnamedSegment,
 }
 
 pub struct CodeGenerator {
@@ -79,11 +82,11 @@ impl CodeGenerator {
         let code = match cmd {
             // x + y
             // M+D はない
-            Add => self.binary_op("M=D+M"),
+            Add => idiom::binary_op("D+M"),
             // x - y
-            Sub => self.binary_op("M=M-D"),
+            Sub => idiom::binary_op("M-D"),
             // -x
-            Neg => self.unary_op("-"),
+            Neg => idiom::unary_op("-"),
             // x == y
             Eq => self.jump("JEQ")?,
             // x > y
@@ -92,41 +95,14 @@ impl CodeGenerator {
             Lt => self.jump("JLT")?,
             // x & y
             // M&D はない
-            And => self.binary_op("M=D&M"),
+            And => idiom::binary_op("D&M"),
             // x or y
             // M|D はない
-            Or => self.binary_op("M=D|M"),
+            Or => idiom::binary_op("D|M"),
             // !x
-            Not => self.unary_op("!"),
+            Not => idiom::unary_op("!"),
         };
         Ok(code)
-    }
-
-    fn binary_op(&self, expr: &str) -> String {
-        // スタックからrightをポップ
-        // スタックの頂点(left)を left op right に書き換える
-        // A=A-1 は、RAM[@SP]を-1するわけではない
-        format!(
-            r#"// binary op
-@SP
-AM=M-1 // SP--
-D=M    // D = *SP
-A=A-1  // ptr = SP - 1
-{}     // *(ptr) = *(ptr) op D
-"#,
-            expr
-        )
-    }
-
-    fn unary_op(&self, op: &str) -> String {
-        format!(
-            r#"// unary op
-@SP     // ptr = SP
-A=M-1   // ptr = ptr - 1
-M={}M   // *(ptr) = op *(ptr)
-"#,
-            op
-        )
     }
 
     fn jump(&mut self, jmp: &str) -> Result<String, CodeGenError> {
@@ -175,60 +151,60 @@ M=M-1 // SP-- (lhsが格納されていたアドレスに条件式の結果を�
     }
 
     /// segment[index]をスタックにプッシュ
+    /// index: 0-index
     fn push(&self, segment: &Segment, index: u16) -> Result<String, CodeGenError> {
         use segment::Segment::*;
         // 全場合においてDレジスタにデータを入れてからD経由でRAM[@SP]にプッシュするつもりだが、どうなることやら
-        let code0 = match segment {
-            Arg => todo!(),
-            Local => todo!(),
+        let code = match segment {
+            Arg | Local | This | That => {
+                let name = segment.name().ok_or(CodeGenError::UnnamedSegment)?;
+                idiom::push_from_named_segment(&name, index)
+            }
             // 現在翻訳中のjackファイルのスタティック変数
             Static => {
                 let filename = self.get_filename()?;
                 format!(
-                    r#"// static <n>
-@{}.{}
+                    r#"// push static <n>
+@{0}.{1}
 D=M
+{2}
 "#,
-                    filename, index
+                    filename,
+                    index,
+                    idiom::push_from_d()
                 )
             }
             // constantはRAMに割り当てられていないので、indexを単なる定数値として扱う
             Constant => {
                 format!(
-                    r#"// constant <n>
-@{}
+                    r#"// push constant <n>
+@{0}
 D=A
+{1}
 "#,
-                    index
+                    index,
+                    idiom::push_from_d()
                 )
             }
-            This => todo!(),
-            That => todo!(),
-            Pointer => todo!(),
-            Temp => todo!(),
+            Pointer | Temp => idiom::push_from_unnamed_segment(segment, index),
         };
-        let code1 = idiom::push_from_d();
-        let code = format!("{}{}", code0, code1);
         Ok(code)
     }
 
     /// スタックからポップしたデータをsegment[index]に格納
+    /// index: 0-index
     fn pop(&self, segment: &Segment, index: u16) -> Result<String, CodeGenError> {
-        todo!();
         use segment::Segment::*;
 
-        let code0 = idiom::pop_to_d();
-        let code1 = match segment {
-            Arg => todo!(),
-            Local => todo!(),
+        let code = match segment {
+            Arg | Local | This | That => {
+                let name = segment.name().ok_or(CodeGenError::UnnamedSegment)?;
+                idiom::pop_to_named_segment(&name, index)
+            }
             Static => todo!(),
             Constant => todo!(),
-            This => todo!(),
-            That => todo!(),
-            Pointer => todo!(),
-            Temp => todo!(),
+            Pointer | Temp => idiom::pop_to_unnamed_segment(segment, index),
         };
-        let code = format!("{}{}", code0, "");
         Ok(code)
     }
 
