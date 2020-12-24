@@ -50,9 +50,5 @@ fn main() -> Result<()> {
     };
 
     Translator::run(&vm_paths, &asm_path)?;
-
-    println!("{:?}", vm_paths);
-    println!("{:?}", asm_path);
-    // File::create(asm_path)?;
     Ok(())
 }

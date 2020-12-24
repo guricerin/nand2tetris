@@ -60,6 +60,11 @@ pub fn parse(input: &str) -> Result<Vec<Command>, ParseError> {
     let lines = input.lines().collect::<Vec<&str>>();
     let mut cmds = vec![];
     for line in lines.iter() {
+        let line = if let Some(i) = line.find("//") {
+            &line[0..i]
+        } else {
+            line
+        };
         let tokens = line.split_whitespace().collect::<Vec<&str>>();
         if !tokens.is_empty() {
             let cmd = parse_line(&tokens)?;

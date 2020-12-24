@@ -71,17 +71,18 @@ M=D
         // todo: fix
         let code = match cmd {
             // M+D はない
-            Add => "M=D+M",
-            Sub => "M-D\n",
-            Neg => "-M\n",
-            Eq => "JEQ\n",
-            Gt => "JGT\n",
-            Lt => "JLT\n",
-            // M&D はない
-            And => "D&M\n",
-            // M|D はない
-            Or => "D|M\n",
-            Not => "!M\n",
+            Add => self.binary_op("M=D+M"),
+            // Sub => "M-D\n",
+            // Neg => "-M\n",
+            // Eq => "JEQ\n",
+            // Gt => "JGT\n",
+            // Lt => "JLT\n",
+            // // M&D はない
+            // And => "D&M\n",
+            // // M|D はない
+            // Or => "D|M\n",
+            // Not => "!M\n",
+            _ => todo!(),
         };
         Ok(code.to_string())
     }
@@ -105,14 +106,13 @@ A=A-1
     fn mem_access(&self, cmd: &MemAccess) -> Result<String, CodeGenError> {
         use MemAccess::*;
         match cmd {
-            Push(segment, index) => todo!(),
-            Pop(segment, index) => todo!(),
+            Push(segment, index) => self.push(segment, *index),
+            Pop(segment, index) => self.pop(segment, *index),
         }
-        todo!();
     }
 
     /// segment[index]をスタックにプッシュ
-    fn push(&self, segment: Segment, index: u16) -> Result<String, CodeGenError> {
+    fn push(&self, segment: &Segment, index: u16) -> Result<String, CodeGenError> {
         use segment::Segment::*;
         // 全場合においてDレジスタにデータを入れてからD経由でRAM[@SP]にプッシュするつもりだが、どうなることやら
         let code0 = match segment {
@@ -146,10 +146,10 @@ D=A
         // スタックにプッシュ
         // @SPの参照先にDを入れた後、@SP自体をインクリメント
         let code1 = r#"// push
-@SP
+@SP // *SP=D
 A=M
 M=D
-@SP
+@SP // SP++
 M=M+1
 "#;
         let code = format!("{}{}", code0, code1);
@@ -157,7 +157,7 @@ M=M+1
     }
 
     /// スタックからポップしたデータをsegment[index]に格納
-    fn pop(&self, segment: Segment, index: u16) -> Result<String, CodeGenError> {
+    fn pop(&self, segment: &Segment, index: u16) -> Result<String, CodeGenError> {
         use segment::Segment::*;
         todo!();
     }

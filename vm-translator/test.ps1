@@ -17,35 +17,50 @@ function print-result([bool] $success, $msg) {
 function test ($path) {
     $target_dir = Join-Path $PSScriptRoot $path
     $name = Split-Path $target_dir -Leaf
-    cargo run -- $target_dir
-    print-result -success $? "cargo run"
+    Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run -- $target_dir" -Wait -NoNewWindow
 
-    return cmd.exe /c $TEST_SCRIPT $path/$name.tst
+    return cmd.exe /c $TEST_SCRIPT $target_dir/$name.tst
+}
+
+function run-cargo($arg) {
+    $cmd = "cargo"
+    # Invoke-Expressionは非同期実行しかできず戻り値を取得できないので、これをつかう
+    $proc = Start-Process $cmd -WorkingDirectory $PSScriptRoot -ArgumentList $arg -Wait -NoNewWindow -PassThru
+    $res = $proc.ExitCode -eq 0
+    print-result -success $res "$cmd $arg"
 }
 
 function main() {
-    Write-Host "cargo build"
-    cargo build
-    print-result -success $? "cargo build"
+    # cargo test
+    run-cargo "test"
+
+    # cargo build
+    run-cargo "build"
 
     $successes = @()
-    $errors = @()
+    $fails = @()
 
-    $target = "../07-vm1-stack-arithmetic/StackArithmetic/SimpleAdd"
-    $res = test -path $target
-    if ($res) {
-        $successes += $target
-    }
-    else {
-        $errors += $target
+    @(
+        "../07-vm1-stack-arithmetic/StackArithmetic/SimpleAdd"
+        "../07-vm1-stack-arithmetic/StackArithmetic/StackTest"
+        "../07-vm1-stack-arithmetic/MemoryAccess/BasicTest"
+        "../07-vm1-stack-arithmetic/MemoryAccess/PointerTest"
+        "../07-vm1-stack-arithmetic/MemoryAccess/StaticTest"
+    ) | ForEach-Object {
+        $res = test -path $_
+        if ($res) {
+            $successes += $_
+        }
+        else {
+            $fails += $_
+        }
     }
 
-    Write-Host "successes:"
+    Write-Host "test result:" -ForegroundColor Yellow
     $successes | ForEach-Object {
         Write-Host "  [o] ${_}" -ForegroundColor Green
     }
-    Write-Host "errors:"
-    $errors | ForEach-Object {
+    $fails | ForEach-Object {
         Write-Host "  [x] ${_}" -ForegroundColor Red
     }
 }
