@@ -26,7 +26,6 @@ impl TranslateError {
 }
 
 pub fn run(vm_paths: &Vec<PathBuf>, out_path: &Path) -> Result<(), TranslateError> {
-    // let trans = Self::new(vm_files);
     if vm_paths.is_empty() {
         return Err(TranslateError::etc("not found .vm file"));
     }
@@ -55,5 +54,6 @@ pub fn run(vm_paths: &Vec<PathBuf>, out_path: &Path) -> Result<(), TranslateErro
         writer.write(head.as_bytes())?;
         let asm_code = codegen.run(vm_filename, &cmds)?;
         writer.write(asm_code.as_bytes())?;
-    }    Ok(())
+    }
+    Ok(())
 }

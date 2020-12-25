@@ -1,9 +1,9 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Func {
-    /// function func-name local-var-num
-    Func(String, u32),
-    /// call func-name args-num
-    Call(String, u32),
+    /// 関数定義
+    Func { name: String, argc: u16 },
+    /// 関数呼び出し
+    Call { name: String, argc: u16 },
     /// return
     Return,
 }

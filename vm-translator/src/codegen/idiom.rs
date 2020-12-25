@@ -1,6 +1,7 @@
 use super::vm_bool::VmBool;
 
-pub use fork::*;
+pub use flow::*;
+pub use jump::*;
 pub use operate::*;
 pub use stack_pop::*;
 pub use stack_push::*;
@@ -49,7 +50,7 @@ M={}M   // *(ptr) = op *(ptr)
     }
 }
 
-pub mod fork {
+pub mod jump {
     use super::*;
 
     pub fn jump(jmp: &str, true_label: &str, false_label: &str, break_label: &str) -> String {
@@ -163,6 +164,45 @@ M=D
 "#,
             pop_to_d(),
             r_name
+        )
+    }
+}
+
+pub mod flow {
+    /// ラベルが一意になるように加工
+    fn edit_label(filename: &str, funcname: &str, org_label: &str) -> String {
+        format!("{}.{}.{}", filename, funcname, org_label)
+    }
+    pub fn label(filename: &str, funcname: &str, org_label: &str) -> String {
+        format!(
+            r#"// label ({0})
+({1})
+"#,
+            org_label,
+            edit_label(filename, funcname, org_label)
+        )
+    }
+    pub fn goto(filename: &str, funcname: &str, org_label: &str) -> String {
+        format!(
+            r#"// goto ({0})
+@{1}
+0;JMP
+"#,
+            org_label,
+            edit_label(filename, funcname, org_label)
+        )
+    }
+    pub fn ifgoto(filename: &str, funcname: &str, org_label: &str) -> String {
+        use super::*;
+        format!(
+            r#"// if-goto ({0})
+{1}
+@{2}
+D;JNE   // D != 0 -> jump
+"#,
+            org_label,
+            pop_to_d(),
+            edit_label(filename, funcname, org_label)
         )
     }
 }

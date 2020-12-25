@@ -21,6 +21,8 @@ pub enum ParseError {
     RedundantTokens(String),
     #[error(transparent)]
     ParseNum(#[from] std::num::ParseIntError),
+    #[error("`{0}` is not permited as label")]
+    NotPermitLabel(String),
 }
 
 impl ParseError {
@@ -34,6 +36,9 @@ impl ParseError {
     pub fn redundant_tokens(tokens: &Vec<&str>) -> Self {
         let tokens = tokens.join(" ");
         Self::RedundantTokens(tokens)
+    }
+    pub fn not_permit_label(label: &str) -> Self {
+        Self::NotPermitLabel(label.to_owned())
     }
 }
 
@@ -51,6 +56,30 @@ impl Command {
     }
     pub fn pop(seg: Segment, n: u16) -> Self {
         Self::MemAccess(MemAccess::Pop(seg, n))
+    }
+    pub fn label(label: &str) -> Self {
+        Self::Flow(Flow::Label(label.to_string()))
+    }
+    pub fn goto(label: &str) -> Self {
+        Self::Flow(Flow::Goto(label.to_string()))
+    }
+    pub fn ifgoto(label: &str) -> Self {
+        Self::Flow(Flow::IfGoto(label.to_string()))
+    }
+    pub fn func(f: &str, n: u16) -> Self {
+        Self::Func(Func::Func {
+            name: f.to_string(),
+            argc: n,
+        })
+    }
+    pub fn call(f: &str, n: u16) -> Self {
+        Self::Func(Func::Call {
+            name: f.to_string(),
+            argc: n,
+        })
+    }
+    pub fn f_return() -> Self {
+        Self::Func(Func::Return)
     }
 }
 
@@ -96,13 +125,13 @@ fn parse_line(tokens: &Vec<&str>) -> Result<Command, ParseError> {
         "push" => parse_push(tokens),
         "pop" => parse_pop(tokens),
         // program flow
-        "label" => todo!(),
-        "goto" => todo!(),
-        "if-goto" => todo!(),
+        "label" => parse_label(tokens),
+        "goto" => parse_goto(tokens),
+        "if-goto" => parse_ifgoto(tokens),
         // function call
-        "function" => todo!(),
-        "call" => todo!(),
-        "return" => todo!(),
+        "function" => parse_func(tokens),
+        "call" => parse_call(tokens),
+        "return" => parse_return(tokens),
         _ => Err(ParseError::unexpected_token(tokens[0])),
     }
 }
@@ -147,6 +176,63 @@ fn parse_segment(tok: &str) -> Result<Segment, ParseError> {
         _ => return Err(ParseError::unexpected_token(tok)),
     };
     Ok(seg)
+}
+
+// todo: 先頭の数値を許容してしまうので直せ
+fn verify_label(label: &str) -> Result<(), ParseError> {
+    use regex::Regex;
+
+    let re = Regex::new(r"[a-zA-Z\.:_]+[0-9a-zA-Z\.:_]*").unwrap();
+    if re.is_match(label) {
+        Ok(())
+    } else {
+        Err(ParseError::not_permit_label(label))
+    }
+}
+
+fn parse_label(tokens: &Vec<&str>) -> Result<Command, ParseError> {
+    let _ = check_tokens_num(tokens, 2)?;
+    let label = tokens[1];
+    let _ = verify_label(label)?;
+    let cmd = Command::label(label);
+    Ok(cmd)
+}
+
+fn parse_goto(tokens: &Vec<&str>) -> Result<Command, ParseError> {
+    let _ = check_tokens_num(tokens, 2)?;
+    let label = tokens[1];
+    let cmd = Command::goto(label);
+    Ok(cmd)
+}
+
+fn parse_ifgoto(tokens: &Vec<&str>) -> Result<Command, ParseError> {
+    let _ = check_tokens_num(tokens, 2)?;
+    let label = tokens[1];
+    let cmd = Command::ifgoto(label);
+    Ok(cmd)
+}
+
+fn parse_func(tokens: &Vec<&str>) -> Result<Command, ParseError> {
+    let _ = check_tokens_num(tokens, 3)?;
+    let label = tokens[1];
+    let _ = verify_label(label)?;
+    let n = parse_num(tokens[2])?;
+    let cmd = Command::func(label, n);
+    Ok(cmd)
+}
+
+fn parse_call(tokens: &Vec<&str>) -> Result<Command, ParseError> {
+    let _ = check_tokens_num(tokens, 3)?;
+    let label = tokens[1];
+    let n = parse_num(tokens[2])?;
+    let cmd = Command::call(label, n);
+    Ok(cmd)
+}
+
+fn parse_return(tokens: &Vec<&str>) -> Result<Command, ParseError> {
+    let _ = check_tokens_num(tokens, 1)?;
+    let cmd = Command::f_return();
+    Ok(cmd)
 }
 
 fn parse_num(tok: &str) -> Result<u16, ParseError> {
@@ -261,5 +347,65 @@ mod tests {
         let input = "push local 100 local";
         let actual = parse(input);
         assert!(actual.is_err(), "redundant token");
+    }
+
+    static TEST_NAME: &'static str =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_.:0123456789";
+
+    #[test]
+    fn test_parse_label() {
+        let input = format!("label {}", TEST_NAME);
+        let actual = parse(&input).unwrap();
+        assert_eq!(actual, vec![Command::label(TEST_NAME)]);
+
+        // let actual = parse("label 0_w");
+        // assert!(actual.is_err(), "label head must be not number");
+    }
+
+    #[test]
+    fn test_parse_goto_and_ifgoto() {
+        let input = format!("goto {}", TEST_NAME);
+        let actual = parse(&input).unwrap();
+        assert_eq!(actual, vec![Command::goto(TEST_NAME)]);
+
+        let input = format!("if-goto {}", TEST_NAME);
+        let actual = parse(&input).unwrap();
+        assert_eq!(actual, vec![Command::ifgoto(TEST_NAME)]);
+    }
+
+    #[test]
+    fn test_parse_func() {
+        let input = format!("function {} 0", TEST_NAME);
+        let actual = parse(&input).unwrap();
+        assert_eq!(actual, vec![Command::func(TEST_NAME, 0)]);
+
+        let input = format!("function {} -1", TEST_NAME);
+        let actual = parse(&input);
+        assert!(actual.is_err(), "wrong number");
+
+        // let input = format!("function {} 0", "0:");
+        // let actual = parse(&input);
+        // assert!(actual.is_err(), "label head must be not number");
+    }
+
+    #[test]
+    fn test_parse_call() {
+        let input = format!("call {} 0", TEST_NAME);
+        let actual = parse(&input).unwrap();
+        assert_eq!(actual, vec![Command::call(TEST_NAME, 0)]);
+
+        let input = format!("call {} -1", TEST_NAME);
+        let actual = parse(&input);
+        assert!(actual.is_err(), "wrong number");
+
+        // let input = format!("call {} 0", "0:");
+        // let actual = parse(&input);
+        // assert!(actual.is_err(), "label head must be not number");
+    }
+
+    #[test]
+    fn test_parse_return() {
+        let actual = parse("return").unwrap();
+        assert_eq!(actual, vec![Command::f_return()]);
     }
 }

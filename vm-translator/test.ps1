@@ -13,7 +13,7 @@ function print-result([bool] $success, $msg) {
     }
 }
 
-function test ($path) {
+function test($path) {
     $target_dir = Join-Path $PSScriptRoot $path
     $name = Split-Path $target_dir -Leaf
     Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run --release -- $target_dir" -Wait -NoNewWindow
@@ -45,6 +45,12 @@ function main() {
         "../07-vm1-stack-arithmetic/MemoryAccess/BasicTest"
         "../07-vm1-stack-arithmetic/MemoryAccess/PointerTest"
         "../07-vm1-stack-arithmetic/MemoryAccess/StaticTest"
+        "../08-vm2-program-control/ProgramFlow/BasicLoop"
+        "../08-vm2-program-control/ProgramFlow/FibonacciSeries"
+        # "../08-vm2-program-control/FunctionCalls/SimpleFunction"
+        # "../08-vm2-program-control/FunctionCalls/FibonacciElement"
+        # "../08-vm2-program-control/FunctionCalls/StaticsTest"
+        # "../08-vm2-program-control/FunctionCalls/NestedCall"
     ) | ForEach-Object {
         $res = test -path $_
         if ($res) {

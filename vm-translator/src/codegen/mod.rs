@@ -12,12 +12,22 @@ pub enum CodeGenError {
     UnnamedSegment,
     #[error("unindexed segment (pointer or temp only")]
     UnindexedSegment,
+    #[error("must not use `label` command outer `function` command\nlabel name: {0}")]
+    UninitializeFunction(String),
+}
+
+impl CodeGenError {
+    pub fn uninitialize_function(name: &str) -> Self {
+        Self::UninitializeFunction(name.to_owned())
+    }
 }
 
 pub struct CodeGenerator {
     /// without ext
     filename: Option<String>,
-    if_label_id: usize,
+    if_label_id: u64,
+    /// 現在翻訳中の関数名
+    func_name: Option<String>,
 }
 
 impl CodeGenerator {
@@ -29,6 +39,7 @@ impl CodeGenerator {
         Self {
             filename: None,
             if_label_id: 0,
+            func_name: None,
         }
     }
 
@@ -44,6 +55,14 @@ impl CodeGenerator {
             .clone()
             .ok_or(CodeGenError::UninitializeFileName)?;
         Ok(filename)
+    }
+
+    fn funcname_or_default(&self) -> String {
+        if let Some(f_name) = self.func_name.clone() {
+            f_name
+        } else {
+            "".to_owned()
+        }
     }
 
     fn generate(&mut self, cmds: &Vec<Command>) -> Result<String, CodeGenError> {
@@ -123,7 +142,7 @@ impl CodeGenerator {
     /// index: 0-index
     fn push(&self, segment: &Segment, index: u16) -> Result<String, CodeGenError> {
         use segment::Segment::*;
-        // 全場合においてDレジスタにデータを入れてからD経由でRAM[@SP]にプッシュするつもりだが、どうなることやら
+        // 全場合においてDレジスタにデータを入れてからD経由でRAM[@SP]にプッシュする
         let code = match segment {
             // constantはRAMに割り当てられていないので、indexを単なる定数値として扱う
             Constant => {
@@ -182,10 +201,52 @@ D=A
     }
 
     fn flow(&self, cmd: &Flow) -> Result<String, CodeGenError> {
-        todo!();
+        use flow::Flow::*;
+
+        let code = match cmd {
+            // スコープはそれが定義された関数内
+            Label(name) => {
+                let filename = self.get_filename()?;
+                let funcname = self.funcname_or_default();
+                idiom::label(&filename, &funcname, name)
+            }
+            // 無条件移動 labelの位置に移動
+            // 移動先は同じ関数内に限られる
+            Goto(label) => {
+                let filename = self.get_filename()?;
+                let funcname = self.funcname_or_default();
+                idiom::goto(&filename, &funcname, label)
+            }
+            // スタックをポップ、値が0以外なら移動
+            // 移動先は同じ関数内に限られる
+            IfGoto(label) => {
+                let filename = self.get_filename()?;
+                let funcname = self.funcname_or_default();
+                idiom::ifgoto(&filename, &funcname, label)
+            }
+        };
+        Ok(code)
     }
 
-    fn func(&self, cmd: &Func) -> Result<String, CodeGenError> {
-        todo!();
+    fn func(&mut self, cmd: &Func) -> Result<String, CodeGenError> {
+        use func::Func::*;
+
+        let code = match cmd {
+            // argc個のローカル変数をもつnameという名前の関数を定義する
+            Func { name, argc } => {
+                self.func_name = Some(name.clone());
+                todo!();
+            }
+            // nameという関数を呼ぶ
+            // その前にargc個の引数をスタックにプッシュする
+            Call { name, argc } => {
+                todo!();
+            }
+            // 呼び出し元にリターン
+            Return => {
+                todo!();
+            }
+        };
+        Ok(code)
     }
 }
