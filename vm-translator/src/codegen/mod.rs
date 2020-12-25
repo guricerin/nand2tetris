@@ -2,17 +2,15 @@ mod idiom;
 mod vm_bool;
 
 use crate::parser::{arithmetic::*, flow::*, func::*, mem_access::*, segment::*, *};
-use vm_bool::*;
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CodeGenError {
     #[error("uninitialize file name")]
     UninitializeFileName,
-    #[error("unnamed segment (only argument, local, this, that")]
+    #[error("unnamed segment (argument, local, this, or that only")]
     UnnamedSegment,
-    #[error("unindexed segment (only pointer, temp")]
+    #[error("unindexed segment (pointer or temp only")]
     UnindexedSegment,
 }
 
@@ -151,16 +149,8 @@ D=A
             // 現在翻訳中のjackファイルのスタティック変数
             Static => {
                 let filename = self.get_filename()?;
-                format!(
-                    r#"// push static n
-@{0}.{1}
-D=M
-{2}
-"#,
-                    filename,
-                    index,
-                    idiom::push_from_d()
-                )
+                let name = format!("{}.{}", filename, index);
+                idiom::push_from_unnamed_segment(&name)
             }
         };
         Ok(code)
@@ -181,7 +171,11 @@ D=M
                 let name = format!("R{}", ram_index + index);
                 idiom::pop_to_unnamed_segment(&name)
             }
-            Static => todo!(),
+            Static => {
+                let filename = self.get_filename()?;
+                let name = format!("{}.{}", filename, index);
+                idiom::pop_to_unnamed_segment(&name)
+            }
             Constant => todo!(),
         };
         Ok(code)
