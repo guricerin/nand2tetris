@@ -4,4 +4,5 @@
 *.hack
 
 07-vm1-stack-arithmetic/**/*.asm
+08-vm2-program-control/**/*.asm
 
