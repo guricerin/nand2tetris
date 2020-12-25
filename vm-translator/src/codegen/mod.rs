@@ -1,14 +1,8 @@
 mod idiom;
 mod vm_bool;
 
+use crate::parser::{arithmetic::*, flow::*, func::*, mem_access::*, segment::*, *};
 use vm_bool::*;
-
-use crate::parser::*;
-use arithmetic::*;
-use flow::*;
-use func::*;
-use mem_access::*;
-use segment::*;
 
 use thiserror::Error;
 
@@ -16,8 +10,10 @@ use thiserror::Error;
 pub enum CodeGenError {
     #[error("uninitialize file name")]
     UninitializeFileName,
-    #[error("unnamed segment")]
+    #[error("unnamed segment (only argument, local, this, that")]
     UnnamedSegment,
+    #[error("unindexed segment (only pointer, temp")]
+    UnindexedSegment,
 }
 
 pub struct CodeGenerator {
@@ -79,6 +75,7 @@ impl CodeGenerator {
 
     fn arithmetic(&mut self, cmd: &Arithmetic) -> Result<String, CodeGenError> {
         use arithmetic::Arithmetic::*;
+
         let code = match cmd {
             // x + y
             // M+D はない
@@ -112,33 +109,7 @@ impl CodeGenerator {
         let false_label = format!("_COND_FALSE_{}_{}_", &filename, self.if_label_id);
         let break_label = format!("_IF_BLOCK_BREAK_{}_{}_", &filename, self.if_label_id);
         self.if_label_id += 1;
-        let code = format!(
-            r#"// jump
-{0}
-A=A-1 // ptr--
-D=M-D // lhs - rhs
-@{1}
-D;{6} // compare D to 0: true -> jump to TRUE false -> jump to FALSE
-({2}) // FALSE block
-D={3} // D = false
-@{5}
-0;JMP // jump to BREAK
-({1}) // TRUE block
-D={4} // D = true
-({5}) // BREAK
-@SP
-M=M-1 // SP-- (lhsが格納されていたアドレスに条件式の結果を突っ込むため)
-{7}
-"#,
-            idiom::pop_to_d(),
-            true_label,
-            false_label,
-            VmBool::False as i32,
-            VmBool::True as i32,
-            break_label,
-            jmp,
-            idiom::push_from_d()
-        );
+        let code = idiom::jump(jmp, &true_label, &false_label, &break_label);
         Ok(code)
     }
 
@@ -156,15 +127,32 @@ M=M-1 // SP-- (lhsが格納されていたアドレスに条件式の結果を�
         use segment::Segment::*;
         // 全場合においてDレジスタにデータを入れてからD経由でRAM[@SP]にプッシュするつもりだが、どうなることやら
         let code = match segment {
+            // constantはRAMに割り当てられていないので、indexを単なる定数値として扱う
+            Constant => {
+                format!(
+                    r#"// push constant n
+@{0}
+D=A
+{1}
+"#,
+                    index,
+                    idiom::push_from_d()
+                )
+            }
             Arg | Local | This | That => {
                 let name = segment.name().ok_or(CodeGenError::UnnamedSegment)?;
                 idiom::push_from_named_segment(&name, index)
+            }
+            Pointer | Temp => {
+                let ram_index = segment.ram_index().ok_or(CodeGenError::UnindexedSegment)?;
+                let name = format!("R{}", ram_index + index);
+                idiom::push_from_unnamed_segment(&name)
             }
             // 現在翻訳中のjackファイルのスタティック変数
             Static => {
                 let filename = self.get_filename()?;
                 format!(
-                    r#"// push static <n>
+                    r#"// push static n
 @{0}.{1}
 D=M
 {2}
@@ -174,19 +162,6 @@ D=M
                     idiom::push_from_d()
                 )
             }
-            // constantはRAMに割り当てられていないので、indexを単なる定数値として扱う
-            Constant => {
-                format!(
-                    r#"// push constant <n>
-@{0}
-D=A
-{1}
-"#,
-                    index,
-                    idiom::push_from_d()
-                )
-            }
-            Pointer | Temp => idiom::push_from_unnamed_segment(segment, index),
         };
         Ok(code)
     }
@@ -201,9 +176,13 @@ D=A
                 let name = segment.name().ok_or(CodeGenError::UnnamedSegment)?;
                 idiom::pop_to_named_segment(&name, index)
             }
+            Pointer | Temp => {
+                let ram_index = segment.ram_index().ok_or(CodeGenError::UnindexedSegment)?;
+                let name = format!("R{}", ram_index + index);
+                idiom::pop_to_unnamed_segment(&name)
+            }
             Static => todo!(),
             Constant => todo!(),
-            Pointer | Temp => idiom::pop_to_unnamed_segment(segment, index),
         };
         Ok(code)
     }

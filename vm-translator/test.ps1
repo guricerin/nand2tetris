@@ -43,7 +43,7 @@ function main() {
         "../07-vm1-stack-arithmetic/StackArithmetic/SimpleAdd"
         "../07-vm1-stack-arithmetic/StackArithmetic/StackTest"
         "../07-vm1-stack-arithmetic/MemoryAccess/BasicTest"
-        # "../07-vm1-stack-arithmetic/MemoryAccess/PointerTest"
+        "../07-vm1-stack-arithmetic/MemoryAccess/PointerTest"
         # "../07-vm1-stack-arithmetic/MemoryAccess/StaticTest"
     ) | ForEach-Object {
         $res = test -path $_
