@@ -42,7 +42,7 @@ impl CodeGenerator {
 {1}
         "#,
             idiom::INITIALIZE,
-            idiom::call("Sys", TOP_LEVEL_FUNC_LABEL, "Sys.init", 0, 0)
+            idiom::call(TOP_LEVEL_FUNC_LABEL, "Sys.init", 0, 0)
         )
     }
 
@@ -239,8 +239,7 @@ D=A
             // paramc個のローカル変数をもつnameという名前の関数を定義する
             Func { name, paramc } => {
                 self.call_stack.push(name.clone());
-                let filename = self.get_filename()?;
-                idiom::func(&filename, name, *paramc)
+                idiom::func(name, *paramc)
             }
             // 呼び出し元の状態を復元し、呼び出し元にリターン、
             Return => {
@@ -251,9 +250,8 @@ D=A
             Call { name, argc } => {
                 let callee = name;
                 let caller = self.call_stack.last().unwrap();
-                let filename = self.get_filename()?;
                 self.label_id += 1;
-                idiom::call(&filename, caller, callee, *argc, self.label_id)
+                idiom::call(caller, callee, *argc, self.label_id)
             }
         };
         Ok(code)

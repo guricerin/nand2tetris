@@ -211,10 +211,10 @@ D;JNE   // D != 0 -> jump
 pub mod func {
     use super::*;
 
-    fn func_start_label(filename: &str, funcname: &str) -> String {
+    fn func_start_label(funcname: &str) -> String {
         format!("{}", funcname)
     }
-    pub fn func(filename: &str, funcname: &str, paramc: u16) -> String {
+    pub fn func(funcname: &str, paramc: u16) -> String {
         let push_0 = format!(
             r#"// `push 0` for LCL
 @0
@@ -230,13 +230,12 @@ D=A
 "#,
             funcname,
             paramc,
-            func_start_label(filename, funcname),
+            func_start_label(funcname),
             push_0.repeat(paramc as usize) // funcnameにとってのLCLを初期化
         )
     }
 
-    fn return_address_label(filename: &str, funcname: &str, id: u64) -> String {
-        // format!(r#"_RETURN_TO_{0}.{1}:{2}_"#, filename, funcname, id)
+    fn return_address_label(funcname: &str, id: u64) -> String {
         format!(r#"_RETURN_TO_{0}:{1}_"#, funcname, id)
     }
     /// 呼び出し側のtargetを復元
@@ -306,8 +305,8 @@ D=M
         )
     }
     // 現在のSPをこの関数にとってのLCLとしてあつかうので、どっかに保持
-    pub fn call(filename: &str, caller: &str, callee: &str, argc: u16, id: u64) -> String {
-        let return_addr = return_address_label(filename, caller, id);
+    pub fn call(caller: &str, callee: &str, argc: u16, id: u64) -> String {
+        let return_addr = return_address_label(caller, id);
         let push_return_addr = format!(
             r#"// push return-addr
 @{0}
@@ -342,7 +341,7 @@ M=D
 0;JMP
 ({1})   // return to caller
 "#,
-            func_start_label(filename, callee),
+            func_start_label(callee),
             return_addr
         );
         format!(
