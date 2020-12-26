@@ -18,7 +18,7 @@ M=D
 /// ただしDのようにコマンド一発でデータを格納できるわけではない
 static GENERIC_REG_ADDR_0: &'static str = "R13";
 static GENERIC_REG_ADDR_1: &'static str = "R14";
-static GENERIC_REG_ADDR_2: &'static str = "R15";
+// static GENERIC_REG_ADDR_2: &'static str = "R15";
 
 pub mod operate {
     /// SP-- の後に *(SP-1) = expr
@@ -211,9 +211,8 @@ D;JNE   // D != 0 -> jump
 pub mod func {
     use super::*;
 
-    /// ラベルが一意になるように加工
     fn func_start_label(filename: &str, funcname: &str) -> String {
-        format!("{}.{}", filename, funcname)
+        format!("{}", funcname)
     }
     pub fn func(filename: &str, funcname: &str, paramc: u16) -> String {
         let push_0 = format!(
@@ -237,9 +236,10 @@ D=A
     }
 
     fn return_address_label(filename: &str, funcname: &str, id: u64) -> String {
-        format!(r#"_RETURN_TO_{0}.{1}:{2}_"#, filename, funcname, id)
+        // format!(r#"_RETURN_TO_{0}.{1}:{2}_"#, filename, funcname, id)
+        format!(r#"_RETURN_TO_{0}:{1}_"#, funcname, id)
     }
-    /// 呼び出し側のtargetを戻す
+    /// 呼び出し側のtargetを復元
     fn restore(target: &str, saving_frame_addr: &str, offset: u16) -> String {
         format!(
             r#"// restore
@@ -294,20 +294,79 @@ A=M
         )
     }
 
-    /// これのあとにpush_from_d()をすれば、push LCLやpush ARGを実現できる？
-    fn save_addr_to_d(label: &str) -> String {
+    fn push_addr(label: &str) -> String {
         format!(
-            r#"
+            r#"// save addr to D
 @{0}
-D=M // D=A かもしれない それかA=M してから D=M ?
-        "#,
-            label
+D=M
+{1}
+"#,
+            label,
+            push_from_d()
         )
     }
     // 現在のSPをこの関数にとってのLCLとしてあつかうので、どっかに保持
-    pub fn call(filename: &str, funcname: &str, argc: u16, id: u64) -> String {
-        let return_addr = return_address_label(filename, funcname, id);
-        format!(r#""#)
+    pub fn call(filename: &str, caller: &str, callee: &str, argc: u16, id: u64) -> String {
+        let return_addr = return_address_label(filename, caller, id);
+        let push_return_addr = format!(
+            r#"// push return-addr
+@{0}
+D=A
+{1}
+"#,
+            return_addr,
+            push_from_d()
+        );
+        let move_arg = format!(
+            r#"// ARG = SP - argc - 5
+@{0}
+D=A
+@SP
+D=M-D
+@ARG
+M=D
+"#,
+            argc + 5
+        );
+        let move_lcl = format!(
+            r#"// LCL = SP
+@SP
+D=M
+@LCL
+M=D
+"#
+        );
+        let invoke_callee = format!(
+            r#"
+@{0}    // invoke callee
+0;JMP
+({1})   // return to caller
+"#,
+            func_start_label(filename, callee),
+            return_addr
+        );
+        format!(
+            r#"/// call {0} {1}
+{2}
+{3}
+{4}
+{5}
+{6}
+{7}
+{8}
+{9}
+"#,
+            callee,
+            argc,
+            push_return_addr,
+            push_addr("LCL"),
+            push_addr("ARG"),
+            push_addr("THIS"),
+            push_addr("THAT"),
+            move_arg,
+            move_lcl,
+            invoke_callee,
+        )
     }
 }
 

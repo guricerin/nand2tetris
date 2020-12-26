@@ -48,9 +48,9 @@ function main() {
         "../08-vm2-program-control/ProgramFlow/BasicLoop"
         "../08-vm2-program-control/ProgramFlow/FibonacciSeries"
         "../08-vm2-program-control/FunctionCalls/SimpleFunction"
-        # "../08-vm2-program-control/FunctionCalls/FibonacciElement"
-        # "../08-vm2-program-control/FunctionCalls/StaticsTest"
-        # "../08-vm2-program-control/FunctionCalls/NestedCall"
+        "../08-vm2-program-control/FunctionCalls/FibonacciElement"
+        "../08-vm2-program-control/FunctionCalls/StaticsTest"
+        "../08-vm2-program-control/FunctionCalls/NestedCall"
     ) | ForEach-Object {
         $res = test -path $_
         if ($res) {

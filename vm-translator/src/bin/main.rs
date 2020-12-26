@@ -27,6 +27,7 @@ fn main() -> Result<()> {
     let opts = Opts::parse();
     // 絶対パス取得
     let vm_path = fs::canonicalize(opts.vm_path)?;
+    let mut init = false;
     // .vmファイル一覧と出力ファイル
     let (vm_paths, asm_path) = if vm_path.is_dir() {
         let dirname = &vm_path
@@ -37,6 +38,9 @@ fn main() -> Result<()> {
             .flat_map(|path| {
                 let path = path.unwrap().path();
                 if let Ok(()) = ensure_vm_file(&path) {
+                    if path.ends_with("Sys.vm") {
+                        init = true;
+                    }
                     Ok(path)
                 } else {
                     Err(())
@@ -49,6 +53,6 @@ fn main() -> Result<()> {
         (vec![vm_path.clone()], vm_path.with_extension("asm"))
     };
 
-    vm_translator::run(&vm_paths, &asm_path)?;
+    vm_translator::run(&vm_paths, &asm_path, init)?;
     Ok(())
 }

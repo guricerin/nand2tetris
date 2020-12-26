@@ -35,7 +35,15 @@ static TOP_LEVEL_FUNC_LABEL: &'static str = "::__TOP_LEVEL__::";
 
 impl CodeGenerator {
     pub fn init_code() -> String {
-        idiom::INITIALIZE.to_string()
+        // let bootstrap = func
+        format!(
+            r#"
+{0}
+{1}
+        "#,
+            idiom::INITIALIZE,
+            idiom::call("Sys", TOP_LEVEL_FUNC_LABEL, "Sys.init", 0, 0)
+        )
     }
 
     pub fn new() -> Self {
@@ -239,15 +247,13 @@ D=A
                 let _callee = self.call_stack.pop().unwrap();
                 idiom::f_return()
             }
-            // 呼び出し側の環境をどっかに保持
-            // argc個の引数をスタックにプッシュする -> 最初の引数があるグローバルスタックの位置を、calleeにとってのARGとする
-            // nameという関数を呼ぶ（Funcで定義したラベルにジャンプ）
-            // goto f の直後にリターンアドレスを宣言しておく
+            // 関数呼び出し
             Call { name, argc } => {
                 let callee = name;
                 let caller = self.call_stack.last().unwrap();
+                let filename = self.get_filename()?;
                 self.label_id += 1;
-                todo!();
+                idiom::call(&filename, caller, callee, *argc, self.label_id)
             }
         };
         Ok(code)

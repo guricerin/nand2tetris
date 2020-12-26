@@ -25,14 +25,16 @@ impl TranslateError {
     }
 }
 
-pub fn run(vm_paths: &Vec<PathBuf>, out_path: &Path) -> Result<(), TranslateError> {
+pub fn run(vm_paths: &Vec<PathBuf>, out_path: &Path, init: bool) -> Result<(), TranslateError> {
     if vm_paths.is_empty() {
         return Err(TranslateError::etc("not found .vm file"));
     }
 
     let mut writer = BufWriter::new(File::create(out_path)?);
     let mut codegen = codegen::CodeGenerator::new();
-    writer.write(codegen::CodeGenerator::init_code().as_bytes())?;
+    if init {
+        writer.write(codegen::CodeGenerator::init_code().as_bytes())?;
+    }
     for vm_path in vm_paths.iter() {
         let vm_code = fs::read_to_string(vm_path)?;
         let cmds = parser::parse(&vm_code)?;
