@@ -18,6 +18,7 @@ M=D
 /// ただしDのようにコマンド一発でデータを格納できるわけではない
 static GENERIC_REG_ADDR_0: &'static str = "R13";
 static GENERIC_REG_ADDR_1: &'static str = "R14";
+/// 未使用
 // static GENERIC_REG_ADDR_2: &'static str = "R15";
 
 pub mod operate {
@@ -103,7 +104,7 @@ M=M+1
     }
 
     /// for local, argument, this, that segment
-    pub fn push_from_named_segment(seg_name: &str, index: u16) -> String {
+    pub fn push_from_direct_segment(seg_name: &str, index: u16) -> String {
         format!(
             r#"/// push from named segment
 {0}
@@ -119,7 +120,7 @@ D=M
     }
 
     /// for pointer or temp segment
-    pub fn push_from_unnamed_segment(r_name: &str) -> String {
+    pub fn push_from_indirect_segment(r_name: &str) -> String {
         format!(
             r#"/// push from unnamed segment
 @{0}
@@ -146,7 +147,7 @@ D=M     // D = *SP
     }
 
     /// for local, argument, this, that segment
-    pub fn pop_to_named_segment(seg_name: &str, index: u16) -> String {
+    pub fn pop_to_direct_segment(seg_name: &str, index: u16) -> String {
         format!(
             "/// pop to named segment\n{}{}{}\n",
             save_addr(seg_name, index),
@@ -156,7 +157,7 @@ D=M     // D = *SP
     }
 
     /// for pointer or temp segment
-    pub fn pop_to_unnamed_segment(r_name: &str) -> String {
+    pub fn pop_to_indirect_segment(r_name: &str) -> String {
         format!(
             r#"/// pop to unnamed segment
 {0}
@@ -170,30 +171,29 @@ M=D
 }
 
 pub mod flow {
-    /// ラベルが一意になるように加工
-    fn edit_label(filename: &str, funcname: &str, org_label: &str) -> String {
-        format!("{}.{}.{}", filename, funcname, org_label)
+    fn edit_label(funcname: &str, org_label: &str) -> String {
+        format!("{}${}", funcname, org_label)
     }
-    pub fn label(filename: &str, funcname: &str, org_label: &str) -> String {
+    pub fn label(funcname: &str, org_label: &str) -> String {
         format!(
             r#"/// label ({0})
 ({1})
 "#,
             org_label,
-            edit_label(filename, funcname, org_label)
+            edit_label(funcname, org_label)
         )
     }
-    pub fn goto(filename: &str, funcname: &str, org_label: &str) -> String {
+    pub fn goto(funcname: &str, org_label: &str) -> String {
         format!(
             r#"/// goto ({0})
 @{1}
 0;JMP
 "#,
             org_label,
-            edit_label(filename, funcname, org_label)
+            edit_label(funcname, org_label)
         )
     }
-    pub fn ifgoto(filename: &str, funcname: &str, org_label: &str) -> String {
+    pub fn ifgoto(funcname: &str, org_label: &str) -> String {
         use super::*;
         format!(
             r#"/// if-goto ({0})
@@ -203,7 +203,7 @@ D;JNE   // D != 0 -> jump
 "#,
             org_label,
             pop_to_d(),
-            edit_label(filename, funcname, org_label)
+            edit_label(funcname, org_label)
         )
     }
 }
@@ -211,9 +211,6 @@ D;JNE   // D != 0 -> jump
 pub mod func {
     use super::*;
 
-    fn func_start_label(funcname: &str) -> String {
-        format!("{}", funcname)
-    }
     pub fn func(funcname: &str, paramc: u16) -> String {
         let push_0 = format!(
             r#"// `push 0` for LCL
@@ -225,12 +222,11 @@ D=A
         );
         format!(
             r#"/// function {0} {1}
-({2})   // function start arddress
-{3}
+({0})   // function start arddress
+{2}
 "#,
             funcname,
             paramc,
-            func_start_label(funcname),
             push_0.repeat(paramc as usize) // funcnameにとってのLCLを初期化
         )
     }
@@ -341,8 +337,7 @@ M=D
 0;JMP
 ({1})   // return to caller
 "#,
-            func_start_label(callee),
-            return_addr
+            callee, return_addr
         );
         format!(
             r#"/// call {0} {1}

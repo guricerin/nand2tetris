@@ -8,18 +8,10 @@ use thiserror::Error;
 pub enum CodeGenError {
     #[error("uninitialize file name")]
     UninitializeFileName,
-    #[error("unnamed segment (argument, local, this, or that only")]
-    UnnamedSegment,
-    #[error("unindexed segment (pointer or temp only")]
-    UnindexedSegment,
-    #[error("must not use `label` command outer `function` command\nlabel name: {0}")]
-    UninitializeFunction(String),
-}
-
-impl CodeGenError {
-    pub fn uninitialize_function(name: &str) -> Self {
-        Self::UninitializeFunction(name.to_owned())
-    }
+    #[error("not direct segment (argument, local, this, or that only")]
+    NotDirectSegment,
+    #[error("not indirect segment (pointer, temp, static only")]
+    NotIndirectSegment,
 }
 
 pub struct CodeGenerator {
@@ -27,15 +19,14 @@ pub struct CodeGenerator {
     filename: Option<String>,
     label_id: u64,
     /// 関数呼び出し履歴 末尾は現在翻訳中の関数名
-    call_stack: Vec<String>,
+    func_name: String,
 }
 
-/// vmファイル内の擬似的なトップレベル関数
+/// 擬似的なトップレベル関数
 static TOP_LEVEL_FUNC_LABEL: &'static str = "::__TOP_LEVEL__::";
 
 impl CodeGenerator {
     pub fn init_code() -> String {
-        // let bootstrap = func
         format!(
             r#"
 {0}
@@ -50,14 +41,14 @@ impl CodeGenerator {
         Self {
             filename: None,
             label_id: 0,
-            call_stack: vec![],
+            func_name: TOP_LEVEL_FUNC_LABEL.to_owned(),
         }
     }
 
     pub fn run(&mut self, filename: &str, cmds: &Vec<Command>) -> Result<String, CodeGenError> {
         self.filename = Some(filename.to_owned());
         self.label_id = 0;
-        self.call_stack.push(TOP_LEVEL_FUNC_LABEL.to_owned());
+        self.func_name = TOP_LEVEL_FUNC_LABEL.to_owned();
         self.generate(cmds)
     }
 
@@ -161,19 +152,19 @@ D=A
                 )
             }
             Arg | Local | This | That => {
-                let name = segment.name().ok_or(CodeGenError::UnnamedSegment)?;
-                idiom::push_from_named_segment(&name, index)
+                let name = segment.name().ok_or(CodeGenError::NotIndirectSegment)?;
+                idiom::push_from_direct_segment(&name, index)
             }
             Pointer | Temp => {
-                let ram_index = segment.ram_index().ok_or(CodeGenError::UnindexedSegment)?;
+                let ram_index = segment.ram_index().ok_or(CodeGenError::NotDirectSegment)?;
                 let name = format!("R{}", ram_index + index);
-                idiom::push_from_unnamed_segment(&name)
+                idiom::push_from_indirect_segment(&name)
             }
             // 現在翻訳中のjackファイルのスタティック変数
             Static => {
                 let filename = self.get_filename()?;
                 let name = format!("{}.{}", filename, index);
-                idiom::push_from_unnamed_segment(&name)
+                idiom::push_from_indirect_segment(&name)
             }
         };
         Ok(code)
@@ -186,20 +177,20 @@ D=A
 
         let code = match segment {
             Arg | Local | This | That => {
-                let name = segment.name().ok_or(CodeGenError::UnnamedSegment)?;
-                idiom::pop_to_named_segment(&name, index)
+                let name = segment.name().ok_or(CodeGenError::NotIndirectSegment)?;
+                idiom::pop_to_direct_segment(&name, index)
             }
             Pointer | Temp => {
-                let ram_index = segment.ram_index().ok_or(CodeGenError::UnindexedSegment)?;
+                let ram_index = segment.ram_index().ok_or(CodeGenError::NotDirectSegment)?;
                 let name = format!("R{}", ram_index + index);
-                idiom::pop_to_unnamed_segment(&name)
+                idiom::pop_to_indirect_segment(&name)
             }
             Static => {
                 let filename = self.get_filename()?;
                 let name = format!("{}.{}", filename, index);
-                idiom::pop_to_unnamed_segment(&name)
+                idiom::pop_to_indirect_segment(&name)
             }
-            Constant => todo!(),
+            Constant => unimplemented!(),
         };
         Ok(code)
     }
@@ -209,25 +200,13 @@ D=A
 
         let code = match cmd {
             // スコープはそれが定義された関数内
-            Label(label) => {
-                let filename = self.get_filename()?;
-                let funcname = self.call_stack.last().unwrap();
-                idiom::label(&filename, &funcname, label)
-            }
+            Label(label) => idiom::label(&self.func_name, label),
             // 無条件移動 labelの位置に移動
             // 移動先は同じ関数内に限られる
-            Goto(label) => {
-                let filename = self.get_filename()?;
-                let funcname = self.call_stack.last().unwrap();
-                idiom::goto(&filename, &funcname, label)
-            }
+            Goto(label) => idiom::goto(&self.func_name, label),
             // スタックをポップ、値が0以外なら移動
             // 移動先は同じ関数内に限られる
-            IfGoto(label) => {
-                let filename = self.get_filename()?;
-                let funcname = self.call_stack.last().unwrap();
-                idiom::ifgoto(&filename, &funcname, label)
-            }
+            IfGoto(label) => idiom::ifgoto(&self.func_name, label),
         };
         Ok(code)
     }
@@ -238,20 +217,16 @@ D=A
         let code = match cmd {
             // paramc個のローカル変数をもつnameという名前の関数を定義する
             Func { name, paramc } => {
-                self.call_stack.push(name.clone());
+                self.func_name = name.to_owned();
                 idiom::func(name, *paramc)
             }
             // 呼び出し元の状態を復元し、呼び出し元にリターン、
-            Return => {
-                let _callee = self.call_stack.pop().unwrap();
-                idiom::f_return()
-            }
+            Return => idiom::f_return(),
             // 関数呼び出し
             Call { name, argc } => {
                 let callee = name;
-                let caller = self.call_stack.last().unwrap();
                 self.label_id += 1;
-                idiom::call(caller, callee, *argc, self.label_id)
+                idiom::call(&self.func_name, callee, *argc, self.label_id)
             }
         };
         Ok(code)
