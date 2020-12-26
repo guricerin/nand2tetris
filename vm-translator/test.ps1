@@ -47,7 +47,7 @@ function main() {
         "../07-vm1-stack-arithmetic/MemoryAccess/StaticTest"
         "../08-vm2-program-control/ProgramFlow/BasicLoop"
         "../08-vm2-program-control/ProgramFlow/FibonacciSeries"
-        # "../08-vm2-program-control/FunctionCalls/SimpleFunction"
+        "../08-vm2-program-control/FunctionCalls/SimpleFunction"
         # "../08-vm2-program-control/FunctionCalls/FibonacciElement"
         # "../08-vm2-program-control/FunctionCalls/StaticsTest"
         # "../08-vm2-program-control/FunctionCalls/NestedCall"

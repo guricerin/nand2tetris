@@ -69,7 +69,7 @@ impl Command {
     pub fn func(f: &str, n: u16) -> Self {
         Self::Func(Func::Func {
             name: f.to_string(),
-            argc: n,
+            paramc: n,
         })
     }
     pub fn call(f: &str, n: u16) -> Self {

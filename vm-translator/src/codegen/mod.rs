@@ -25,10 +25,13 @@ impl CodeGenError {
 pub struct CodeGenerator {
     /// without ext
     filename: Option<String>,
-    if_label_id: u64,
-    /// 現在翻訳中の関数名
-    func_name: Option<String>,
+    label_id: u64,
+    /// 関数呼び出し履歴 末尾は現在翻訳中の関数名
+    call_stack: Vec<String>,
 }
+
+/// vmファイル内の擬似的なトップレベル関数
+static TOP_LEVEL_FUNC_LABEL: &'static str = "::__TOP_LEVEL__::";
 
 impl CodeGenerator {
     pub fn init_code() -> String {
@@ -38,14 +41,15 @@ impl CodeGenerator {
     pub fn new() -> Self {
         Self {
             filename: None,
-            if_label_id: 0,
-            func_name: None,
+            label_id: 0,
+            call_stack: vec![],
         }
     }
 
     pub fn run(&mut self, filename: &str, cmds: &Vec<Command>) -> Result<String, CodeGenError> {
         self.filename = Some(filename.to_owned());
-        self.if_label_id = 0;
+        self.label_id = 0;
+        self.call_stack.push(TOP_LEVEL_FUNC_LABEL.to_owned());
         self.generate(cmds)
     }
 
@@ -55,14 +59,6 @@ impl CodeGenerator {
             .clone()
             .ok_or(CodeGenError::UninitializeFileName)?;
         Ok(filename)
-    }
-
-    fn funcname_or_default(&self) -> String {
-        if let Some(f_name) = self.func_name.clone() {
-            f_name
-        } else {
-            "".to_owned()
-        }
     }
 
     fn generate(&mut self, cmds: &Vec<Command>) -> Result<String, CodeGenError> {
@@ -121,11 +117,11 @@ impl CodeGenerator {
 
     fn jump(&mut self, jmp: &str) -> Result<String, CodeGenError> {
         let filename = self.get_filename()?;
-        let true_label = format!("_COND_TRUE_{}_{}_", &filename, self.if_label_id);
+        let true_label = format!("_COND_TRUE_{}_{}_", &filename, self.label_id);
         // 実はfalse_labelは不要だが、見やすくするために挿入
-        let false_label = format!("_COND_FALSE_{}_{}_", &filename, self.if_label_id);
-        let break_label = format!("_IF_BLOCK_BREAK_{}_{}_", &filename, self.if_label_id);
-        self.if_label_id += 1;
+        let false_label = format!("_COND_FALSE_{}_{}_", &filename, self.label_id);
+        let break_label = format!("_IF_BLOCK_BREAK_{}_{}_", &filename, self.label_id);
+        self.label_id += 1;
         let code = idiom::jump(jmp, &true_label, &false_label, &break_label);
         Ok(code)
     }
@@ -200,28 +196,28 @@ D=A
         Ok(code)
     }
 
-    fn flow(&self, cmd: &Flow) -> Result<String, CodeGenError> {
+    fn flow(&mut self, cmd: &Flow) -> Result<String, CodeGenError> {
         use flow::Flow::*;
 
         let code = match cmd {
             // スコープはそれが定義された関数内
-            Label(name) => {
+            Label(label) => {
                 let filename = self.get_filename()?;
-                let funcname = self.funcname_or_default();
-                idiom::label(&filename, &funcname, name)
+                let funcname = self.call_stack.last().unwrap();
+                idiom::label(&filename, &funcname, label)
             }
             // 無条件移動 labelの位置に移動
             // 移動先は同じ関数内に限られる
             Goto(label) => {
                 let filename = self.get_filename()?;
-                let funcname = self.funcname_or_default();
+                let funcname = self.call_stack.last().unwrap();
                 idiom::goto(&filename, &funcname, label)
             }
             // スタックをポップ、値が0以外なら移動
             // 移動先は同じ関数内に限られる
             IfGoto(label) => {
                 let filename = self.get_filename()?;
-                let funcname = self.funcname_or_default();
+                let funcname = self.call_stack.last().unwrap();
                 idiom::ifgoto(&filename, &funcname, label)
             }
         };
@@ -232,18 +228,25 @@ D=A
         use func::Func::*;
 
         let code = match cmd {
-            // argc個のローカル変数をもつnameという名前の関数を定義する
-            Func { name, argc } => {
-                self.func_name = Some(name.clone());
-                todo!();
+            // paramc個のローカル変数をもつnameという名前の関数を定義する
+            Func { name, paramc } => {
+                self.call_stack.push(name.clone());
+                let filename = self.get_filename()?;
+                idiom::func(&filename, name, *paramc)
             }
-            // nameという関数を呼ぶ
-            // その前にargc個の引数をスタックにプッシュする
-            Call { name, argc } => {
-                todo!();
-            }
-            // 呼び出し元にリターン
+            // 呼び出し元の状態を復元し、呼び出し元にリターン、
             Return => {
+                let _callee = self.call_stack.pop().unwrap();
+                idiom::f_return()
+            }
+            // 呼び出し側の環境をどっかに保持
+            // argc個の引数をスタックにプッシュする -> 最初の引数があるグローバルスタックの位置を、calleeにとってのARGとする
+            // nameという関数を呼ぶ（Funcで定義したラベルにジャンプ）
+            // goto f の直後にリターンアドレスを宣言しておく
+            Call { name, argc } => {
+                let callee = name;
+                let caller = self.call_stack.last().unwrap();
+                self.label_id += 1;
                 todo!();
             }
         };

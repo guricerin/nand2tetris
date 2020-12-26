@@ -1,6 +1,7 @@
 use super::vm_bool::VmBool;
 
 pub use flow::*;
+pub use func::*;
 pub use jump::*;
 pub use operate::*;
 pub use stack_pop::*;
@@ -16,8 +17,8 @@ M=D
 /// 汎用的なレジスタとしてVM側で自由に扱えるRAMアドレス
 /// ただしDのようにコマンド一発でデータを格納できるわけではない
 static GENERIC_REG_ADDR_0: &'static str = "R13";
-// static GENERIC_REG_ADDR_1: &'static str = "R14";
-// static GENERIC_REG_ADDR_2: &'static str = "R15";
+static GENERIC_REG_ADDR_1: &'static str = "R14";
+static GENERIC_REG_ADDR_2: &'static str = "R15";
 
 pub mod operate {
     /// SP-- の後に *(SP-1) = expr
@@ -26,7 +27,7 @@ pub mod operate {
         // スタックの頂点(left)を left op right に書き換える
         // A=A-1 は、RAM[@SP]を-1するわけではない
         format!(
-            r#"// binary op
+            r#"/// binary op
 @SP
 AM=M-1  // SP--
 D=M     // D = *SP
@@ -40,7 +41,7 @@ M={}      // *(ptr) = *(ptr) op D
     /// *(SP-1) = op *SP
     pub fn unary_op(op: &str) -> String {
         format!(
-            r#"// unary op
+            r#"/// unary op
 @SP     // ptr = SP
 A=M-1   // ptr = ptr - 1
 M={}M   // *(ptr) = op *(ptr)
@@ -55,7 +56,7 @@ pub mod jump {
 
     pub fn jump(jmp: &str, true_label: &str, false_label: &str, break_label: &str) -> String {
         format!(
-            r#"// jump
+            r#"/// jump
 {0}
 A=A-1 // ptr--
 D=M-D // lhs - rhs
@@ -124,7 +125,7 @@ D=M
 @{0}
 D=M
 {1}
-        "#,
+"#,
             r_name,
             push_from_d()
         )
@@ -175,7 +176,7 @@ pub mod flow {
     }
     pub fn label(filename: &str, funcname: &str, org_label: &str) -> String {
         format!(
-            r#"// label ({0})
+            r#"/// label ({0})
 ({1})
 "#,
             org_label,
@@ -184,7 +185,7 @@ pub mod flow {
     }
     pub fn goto(filename: &str, funcname: &str, org_label: &str) -> String {
         format!(
-            r#"// goto ({0})
+            r#"/// goto ({0})
 @{1}
 0;JMP
 "#,
@@ -195,7 +196,7 @@ pub mod flow {
     pub fn ifgoto(filename: &str, funcname: &str, org_label: &str) -> String {
         use super::*;
         format!(
-            r#"// if-goto ({0})
+            r#"/// if-goto ({0})
 {1}
 @{2}
 D;JNE   // D != 0 -> jump
@@ -207,6 +208,109 @@ D;JNE   // D != 0 -> jump
     }
 }
 
+pub mod func {
+    use super::*;
+
+    /// ラベルが一意になるように加工
+    fn func_start_label(filename: &str, funcname: &str) -> String {
+        format!("{}.{}", filename, funcname)
+    }
+    pub fn func(filename: &str, funcname: &str, paramc: u16) -> String {
+        let push_0 = format!(
+            r#"// `push 0` for LCL
+@0
+D=A
+{0}
+"#,
+            push_from_d()
+        );
+        format!(
+            r#"/// function {0} {1}
+({2})   // function start arddress
+{3}
+"#,
+            funcname,
+            paramc,
+            func_start_label(filename, funcname),
+            push_0.repeat(paramc as usize) // funcnameにとってのLCLを初期化
+        )
+    }
+
+    fn return_address_label(filename: &str, funcname: &str, id: u64) -> String {
+        format!(r#"_RETURN_TO_{0}.{1}:{2}_"#, filename, funcname, id)
+    }
+    /// 呼び出し側のtargetを戻す
+    fn restore(target: &str, saving_frame_addr: &str, offset: u16) -> String {
+        format!(
+            r#"// restore
+@{0}
+D=A
+@{1}
+A=M-D   // ptr = FRAME - offset
+D=M     // D = *(FRAME - offset)
+@{2}
+M=D     // TARGET = *(FRAME - offset)
+"#,
+            offset, saving_frame_addr, target
+        )
+    }
+    pub fn f_return() -> String {
+        let saving_frame_addr = GENERIC_REG_ADDR_0;
+        let saving_return_addr = GENERIC_REG_ADDR_1;
+        format!(
+            r#"/// return
+@LCL
+D=M     // D = FRAME
+@{0}
+M=D     // save FRAME
+@5
+A=D-A   // RAM[(FRAME-5)]
+D=M     // D = *(FRAME - 5) <- RET
+@{1}
+M=D     // save RET
+{2}
+@ARG    // save return value for caller
+A=M
+M=D     // *ARG = pop()
+@ARG
+D=M+1   // D = ARG + 1
+@SP
+M=D     // SP = ARG + 1
+{3}
+{4}
+{5}
+{6}
+@{1}     // go to RET(caller)
+A=M
+0;JMP
+"#,
+            saving_frame_addr,
+            saving_return_addr,
+            pop_to_d(),
+            restore("THAT", saving_frame_addr, 1),
+            restore("THIS", saving_frame_addr, 2),
+            restore("ARG", saving_frame_addr, 3),
+            restore("LCL", saving_frame_addr, 4),
+        )
+    }
+
+    /// これのあとにpush_from_d()をすれば、push LCLやpush ARGを実現できる？
+    fn save_addr_to_d(label: &str) -> String {
+        format!(
+            r#"
+@{0}
+D=M // D=A かもしれない それかA=M してから D=M ?
+        "#,
+            label
+        )
+    }
+    // 現在のSPをこの関数にとってのLCLとしてあつかうので、どっかに保持
+    pub fn call(filename: &str, funcname: &str, argc: u16, id: u64) -> String {
+        let return_addr = return_address_label(filename, funcname, id);
+        format!(r#""#)
+    }
+}
+
 /// segment[index]をR13に保存
 fn save_addr(seg_name: &str, index: u16) -> String {
     format!(
@@ -214,7 +318,7 @@ fn save_addr(seg_name: &str, index: u16) -> String {
 @{0}
 D=M
 @{1}
-D=D+A   // D = seg_name + index
+D=D+A   // D = seg_base_addr + index
 @{2}
 M=D
 "#,
