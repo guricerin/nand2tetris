@@ -29,11 +29,26 @@ impl Engine {
 
     pub fn lex_to_xml(&self) -> Result<(), CompileError> {
         for jack_file in self.jack_files.iter() {
+            // let run = || -> Result<(), CompileError> {
+            //     let jack_code = fs::read_to_string(jack_file)?;
+            //     let tokens = lex::Lexer::new().run(&jack_code)?;
+            //     let xml = xml_token::translate(&tokens);
+            //     let _ = self.write_file(jack_file, xml)?;
+            //     Ok(())
+            // };
+
+            // match run() {
+            //     Ok(()) => (),
+            //     Err(e) => {
+            //         eprintln!("FILE: {:?}", &jack_file);
+            //         eprintln!("{}", e);
+            //     }
+            // }
+
             let jack_code = fs::read_to_string(jack_file)?;
             let tokens = lex::Lexer::new().run(&jack_code)?;
             let xml = xml_token::translate(&tokens);
             let _ = self.write_file(jack_file, xml)?;
-            todo!();
         }
         Ok(())
     }

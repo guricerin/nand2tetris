@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::Clap;
-use jack_analyzer::compile;
+use jack_analyzer::compilation;
 use std::fs;
 use std::path::PathBuf;
 
@@ -45,8 +45,7 @@ fn main() -> Result<()> {
         return Err(anyhow!("{:?} is not directory", output_dir));
     }
 
-    println!("{:?}", &jack_files);
-    let engine = compile::Engine::new(jack_files, output_dir);
+    let engine = compilation::Engine::new(jack_files, output_dir);
     match opts.mode {
         Mode::Xml => {
             engine.lex_to_xml()?;

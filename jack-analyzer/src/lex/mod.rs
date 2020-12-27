@@ -12,6 +12,8 @@ pub enum LexError {
     HeadZero(Loc),
     #[error("{0}\nint range [0 .. 32767], actual: {1}")]
     IntOverflow(Loc, u64),
+    #[error("{0}\nident head number: {1}")]
+    IdentHeadNumber(Loc, char),
     #[error("{0}\nunexpected end of file")]
     Eof(Loc),
 }
@@ -25,6 +27,9 @@ impl LexError {
     }
     pub fn int_overflow(n: u64, loc: Loc) -> Self {
         Self::IntOverflow(loc, n)
+    }
+    pub fn ident_head_number(c: char, loc: Loc) -> Self {
+        Self::IdentHeadNumber(loc, c)
     }
     pub fn eof(loc: Loc) -> Self {
         Self::Eof(loc)
@@ -198,21 +203,21 @@ impl Lexer {
 
         // 先頭が0の数値は認めない
         if input[start] == b'0' && (end - start) > 1 {
-            return Err(LexError::head_zero(Loc::new(self.row, start)));
+            return Err(LexError::head_zero(Loc::new(self.row, self.col)));
         }
         // todo: 32768はいいかも。2の補数なので。
         if 32767 < n {
-            return Err(LexError::int_overflow(n, Loc::new(self.row, start)));
+            return Err(LexError::int_overflow(n, Loc::new(self.row, self.col)));
         };
 
-        let tok = Token::int(n as u16, Loc::new(self.row, start));
+        let tok = Token::int(n as u16, Loc::new(self.row, self.col));
         Ok((tok, end))
     }
 
     fn symbol(&mut self, input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
         let mut consume = |symbol, b| {
             self.consume_byte(input, start, b).map(|(_, end)| {
-                let tok = Token::symbol(symbol, Loc::new(self.row, start));
+                let tok = Token::symbol(symbol, Loc::new(self.row, self.col));
                 (tok, end)
             })
         };
@@ -259,7 +264,7 @@ impl Lexer {
         while pos < input.len() {
             match input[pos] {
                 b'"' => break,
-                b'\n' => return Err(LexError::invalid_char('\n', Loc::new(self.row, self.col))),
+                b'\n' => return Err(LexError::invalid_char('?', Loc::new(self.row, self.col))),
                 _ => (),
             };
             pos += 1;
@@ -267,16 +272,22 @@ impl Lexer {
         }
         let end = pos;
         let s = String::from_utf8(input[start + 1..end].to_vec()).unwrap();
-        let tok = Token::string(&s, Loc::new(self.row, start));
+        let tok = Token::string(&s, Loc::new(self.row, self.col));
         // 右端の " をスキップ
         Ok((tok, end + 1))
     }
 
     fn keyword_or_ident(&mut self, input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
-        let end = self.recognize_many(input, start, |b| b != b' ');
+        if input[start].is_ascii_digit() {
+            return Err(LexError::ident_head_number(
+                input[start] as char,
+                Loc::new(self.row, self.col),
+            ));
+        }
+        let end = self.recognize_many(input, start, |b| TAIL_IDENT.contains(&b));
         let s = String::from_utf8(input[start..end].to_vec()).unwrap();
 
-        let loc = Loc::new(self.row, start);
+        let loc = Loc::new(self.row, self.col);
         let tok = Token::keyword_or_ident(&s, loc);
         Ok((tok, end))
     }
@@ -286,26 +297,36 @@ impl Lexer {
 mod tests {
     use super::*;
 
+    fn lex_to_tokenkind(input: &str) -> Vec<TokenKind> {
+        let mut lexer = Lexer::new();
+        lexer
+            .run(input)
+            .unwrap()
+            .iter()
+            .map(|ano| ano.value.clone())
+            .collect::<Vec<_>>()
+    }
+
     #[test]
     fn test_lex_number() {
         let mut lexer = Lexer::new();
         let actual = lexer.run("1").unwrap();
-        let expect = Token::int(1, Loc::new(0, 0));
+        let expect = Token::int(1, Loc::new(0, 1));
         assert_eq!(actual, vec![expect]);
 
         let mut lexer = Lexer::new();
         let actual = lexer.run("0").unwrap();
-        let expect = Token::int(0, Loc::new(0, 0));
+        let expect = Token::int(0, Loc::new(0, 1));
         assert_eq!(actual, vec![expect]);
 
         let mut lexer = Lexer::new();
         let actual = lexer.run("10").unwrap();
-        let expect = Token::int(10, Loc::new(0, 0));
+        let expect = Token::int(10, Loc::new(0, 2));
         assert_eq!(actual, vec![expect]);
 
         let mut lexer = Lexer::new();
         let actual = lexer.run("32767").unwrap();
-        let expect = Token::int(32767, Loc::new(0, 0));
+        let expect = Token::int(32767, Loc::new(0, 5));
         assert_eq!(actual, vec![expect]);
     }
 
@@ -326,57 +347,55 @@ mod tests {
 
     #[test]
     fn test_lex_symbol() {
-        let mut lexer = Lexer::new();
-        let actual = lexer.run("{}()[].,;+-*/&|<>=~/").unwrap();
+        let input = "{}()[].,;+-*/&|<>=~/";
+        // let mut lexer = Lexer::new();
+        // let actual = lexer.run("{}()[].,;+-*/&|<>=~/").unwrap();
+        let actual = lex_to_tokenkind(input);
         assert_eq!(
             actual,
             vec![
-                Token::symbol(Symbol::LCurlyParen, Loc::new(0, 0)),
-                Token::symbol(Symbol::RCurlyParen, Loc::new(0, 1)),
-                Token::symbol(Symbol::LParen, Loc::new(0, 2)),
-                Token::symbol(Symbol::RParen, Loc::new(0, 3)),
-                Token::symbol(Symbol::LSqParen, Loc::new(0, 4)),
-                Token::symbol(Symbol::RSqParen, Loc::new(0, 5)),
-                Token::symbol(Symbol::Dot, Loc::new(0, 6)),
-                Token::symbol(Symbol::Comma, Loc::new(0, 7)),
-                Token::symbol(Symbol::SemiColon, Loc::new(0, 8)),
-                Token::symbol(Symbol::Plus, Loc::new(0, 9)),
-                Token::symbol(Symbol::Minus, Loc::new(0, 10)),
-                Token::symbol(Symbol::Asterisk, Loc::new(0, 11)),
-                Token::symbol(Symbol::Slash, Loc::new(0, 12)),
-                Token::symbol(Symbol::And, Loc::new(0, 13)),
-                Token::symbol(Symbol::Or, Loc::new(0, 14)),
-                Token::symbol(Symbol::Lt, Loc::new(0, 15)),
-                Token::symbol(Symbol::Gt, Loc::new(0, 16)),
-                Token::symbol(Symbol::Eq, Loc::new(0, 17)),
-                Token::symbol(Symbol::Tilde, Loc::new(0, 18)),
-                Token::symbol(Symbol::Slash, Loc::new(0, 19)),
+                TokenKind::Symbol(Symbol::LCurlyParen),
+                TokenKind::Symbol(Symbol::RCurlyParen),
+                TokenKind::Symbol(Symbol::LParen),
+                TokenKind::Symbol(Symbol::RParen),
+                TokenKind::Symbol(Symbol::LSqParen),
+                TokenKind::Symbol(Symbol::RSqParen),
+                TokenKind::Symbol(Symbol::Dot),
+                TokenKind::Symbol(Symbol::Comma),
+                TokenKind::Symbol(Symbol::SemiColon),
+                TokenKind::Symbol(Symbol::Plus),
+                TokenKind::Symbol(Symbol::Minus),
+                TokenKind::Symbol(Symbol::Asterisk),
+                TokenKind::Symbol(Symbol::Slash),
+                TokenKind::Symbol(Symbol::And),
+                TokenKind::Symbol(Symbol::Or),
+                TokenKind::Symbol(Symbol::Lt),
+                TokenKind::Symbol(Symbol::Gt),
+                TokenKind::Symbol(Symbol::Eq),
+                TokenKind::Symbol(Symbol::Tilde),
+                TokenKind::Symbol(Symbol::Slash),
             ]
         );
     }
 
     #[test]
     fn test_lex_string() {
-        let mut lexer = Lexer::new();
-        let actual = lexer.run("\"{}()[].,;+-*/&|<>=~/\"").unwrap();
-        let expect = Token::string("{}()[].,;+-*/&|<>=~/", Loc::new(0, 0));
+        let input = "\"{}()[].,;+-*/&|<>=~/\"";
+        let actual = lex_to_tokenkind(input);
+        let expect = Token::string("{}()[].,;+-*/&|<>=~/", Loc::new(0, 20)).value;
         assert_eq!(actual, vec![expect]);
 
-        let mut lexer = Lexer::new();
-        let actual = lexer
-            .run("\"present day, present time, HAHAHAHAHAHAHAHA\"")
-            .unwrap();
+        let input = "\"present day, present time, HAHAHAHAHAHAHAHA\"";
+        let actual = lex_to_tokenkind(input);
         let expect = Token::string(
             "present day, present time, HAHAHAHAHAHAHAHA",
             Loc::new(0, 0),
-        );
+        )
+        .value;
         assert_eq!(actual, vec![expect]);
 
-        let mut lexer = Lexer::new();
-        let actual = lexer
-            .run("\"  This statement contains 0123456789.  \"")
-            .unwrap();
-        let expect = Token::string("  This statement contains 0123456789.  ", Loc::new(0, 0));
+        let actual = lex_to_tokenkind("\"  This statement contains 0123456789.  \"");
+        let expect = Token::string("  This statement contains 0123456789.  ", Loc::new(0, 0)).value;
         assert_eq!(actual, vec![expect]);
     }
 
@@ -425,17 +444,20 @@ mod tests {
     }
 
     #[test]
+    fn test_comment_last_dq() {
+        let mut lexer = Lexer::new();
+        let actual = lexer.run("// hoge \"\n").unwrap();
+        assert_eq!(actual, vec![]);
+    }
+
+    #[test]
     fn test_lex_keyword() {
         fn keyword(input: &str) {
-            let mut lexer = Lexer::new();
-            let actual = lexer.run(input).unwrap();
-            let expect = Token::keyword_or_ident(input, Loc::new(0, 0));
+            let actual = lex_to_tokenkind(input);
+            let expect = Token::keyword_or_ident(input, Loc::new(0, 0)).value;
             assert_eq!(actual.clone(), vec![expect]);
             match actual[0] {
-                Annot {
-                    value: TokenKind::Keyword(_),
-                    ..
-                } => (),
+                TokenKind::Keyword(_) => (),
                 _ => panic!("{} is not keyword", input),
             };
         }
