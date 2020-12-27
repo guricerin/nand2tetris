@@ -105,12 +105,8 @@ impl Lexer {
                 b'"' => {
                     lex_a_token!(self.string(input, pos));
                 }
-                b => {
-                    // todo ident or keyword
-                    return Err(LexError::invalid_char(
-                        b as char,
-                        Loc::new(self.row, self.col),
-                    ));
+                _ => {
+                    lex_a_token!(self.keyword_or_ident(input, pos));
                 }
             }
         }
@@ -277,6 +273,15 @@ impl Lexer {
         // 右端の " をスキップ
         Ok((tok, end + 1))
     }
+
+    fn keyword_or_ident(&mut self, input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
+        let end = self.recognize_many(input, start, |b| b != b' ');
+        let s = String::from_utf8(input[start..end].to_vec()).unwrap();
+
+        let loc = Loc::new(self.row, start);
+        let tok = Token::keyword_or_ident(&s, loc);
+        Ok((tok, end))
+    }
 }
 
 #[cfg(test)]
@@ -418,5 +423,44 @@ mod tests {
                 TokenKind::Int(0),
             ]
         );
+    }
+
+    #[test]
+    fn test_lex_keyword() {
+        fn keyword(input: &str) {
+            let mut lexer = Lexer::new();
+            let actual = lexer.run(input).unwrap();
+            let expect = Token::keyword_or_ident(input, Loc::new(0, 0));
+            assert_eq!(actual.clone(), vec![expect]);
+            match actual[0] {
+                Annot {
+                    value: TokenKind::Keyword(_),
+                    ..
+                } => (),
+                _ => panic!("{} is not keyword", input),
+            };
+        }
+
+        keyword("class");
+        keyword("constructor");
+        keyword("function");
+        keyword("method");
+        keyword("field");
+        keyword("static");
+        keyword("var");
+        keyword("int");
+        keyword("char");
+        keyword("boolean");
+        keyword("void");
+        keyword("true");
+        keyword("false");
+        keyword("null");
+        keyword("this");
+        keyword("let");
+        keyword("do");
+        keyword("if");
+        keyword("else");
+        keyword("while");
+        keyword("return");
     }
 }

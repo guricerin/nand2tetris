@@ -78,7 +78,7 @@ pub enum TokenKind {
 pub type Token = Annot<TokenKind>;
 
 impl Token {
-    pub fn keyword(key: Keyword, loc: Loc) -> Self {
+    fn keyword(key: Keyword, loc: Loc) -> Self {
         Self::new(TokenKind::Keyword(key), loc)
     }
     pub fn symbol(s: Symbol, loc: Loc) -> Self {
@@ -91,7 +91,33 @@ impl Token {
     pub fn string(s: &str, loc: Loc) -> Self {
         Self::new(TokenKind::String(s.to_owned()), loc)
     }
-    pub fn ident(s: &str, loc: Loc) -> Self {
+    fn ident(s: &str, loc: Loc) -> Self {
         Self::new(TokenKind::Ident(s.to_owned()), loc)
+    }
+    pub fn keyword_or_ident(s: &str, loc: Loc) -> Self {
+        match s {
+            "class" => Token::keyword(Keyword::Class, loc),
+            "constructor" => Token::keyword(Keyword::Constructor, loc),
+            "function" => Token::keyword(Keyword::Func, loc),
+            "method" => Token::keyword(Keyword::Method, loc),
+            "field" => Token::keyword(Keyword::Field, loc),
+            "static" => Token::keyword(Keyword::Static, loc),
+            "var" => Token::keyword(Keyword::Var, loc),
+            "int" => Token::keyword(Keyword::Int, loc),
+            "char" => Token::keyword(Keyword::Char, loc),
+            "boolean" => Token::keyword(Keyword::Bool, loc),
+            "void" => Token::keyword(Keyword::Void, loc),
+            "true" => Token::keyword(Keyword::True, loc),
+            "false" => Token::keyword(Keyword::False, loc),
+            "null" => Token::keyword(Keyword::Null, loc),
+            "this" => Token::keyword(Keyword::This, loc),
+            "let" => Token::keyword(Keyword::Let, loc),
+            "do" => Token::keyword(Keyword::Do, loc),
+            "if" => Token::keyword(Keyword::If, loc),
+            "else" => Token::keyword(Keyword::Else, loc),
+            "while" => Token::keyword(Keyword::While, loc),
+            "return" => Token::keyword(Keyword::Return, loc),
+            _ => Token::ident(&s, loc),
+        }
     }
 }
