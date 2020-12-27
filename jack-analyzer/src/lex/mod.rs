@@ -1,35 +1,33 @@
-mod token;
+pub mod token;
 
 use super::types::*;
 use thiserror::Error;
 use token::*;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
-pub enum LexErrorKind {
-    #[error("invalid char: {0}")]
-    InvalidChar(char),
-    #[error("head 0 number")]
-    HeadZero,
-    #[error("int range [0 .. 32767], actual: {0}")]
-    IntOverflow(u64),
-    #[error("unexpected end of file")]
-    Eof,
+pub enum LexError {
+    #[error("{0}\ninvalid char: {1}")]
+    InvalidChar(Loc, char),
+    #[error("{0}\nhead 0 number")]
+    HeadZero(Loc),
+    #[error("{0}\nint range [0 .. 32767], actual: {1}")]
+    IntOverflow(Loc, u64),
+    #[error("{0}\nunexpected end of file")]
+    Eof(Loc),
 }
-
-type LexError = Annot<LexErrorKind>;
 
 impl LexError {
     pub fn invalid_char(c: char, loc: Loc) -> Self {
-        Self::new(LexErrorKind::InvalidChar(c), loc)
+        Self::InvalidChar(loc, c)
     }
     pub fn head_zero(loc: Loc) -> Self {
-        Self::new(LexErrorKind::HeadZero, loc)
+        Self::HeadZero(loc)
     }
     pub fn int_overflow(n: u64, loc: Loc) -> Self {
-        Self::new(LexErrorKind::IntOverflow(n), loc)
+        Self::IntOverflow(loc, n)
     }
     pub fn eof(loc: Loc) -> Self {
-        Self::new(LexErrorKind::Eof, loc)
+        Self::Eof(loc)
     }
 }
 
@@ -82,7 +80,7 @@ impl Lexer {
                 b'/' => {
                     let (next1, next2) = (self.peek(input, pos + 1), self.peek(input, pos + 2));
                     match (next1, next2) {
-                        // 行の終わりまでコメント
+                        // 行末までコメント
                         (Some(b'/'), _) => {
                             let p = self.recognize_many(input, pos, |b| b'\n' != b);
                             pos = p;
@@ -174,7 +172,7 @@ impl Lexer {
                             break;
                         }
                         Some(_) => (),
-                        None => return Err(LexError::eof(Loc::new(self.row, pos))),
+                        None => return Err(LexError::eof(Loc::new(self.row, self.col))),
                     }
                 }
                 b'\n' => {
@@ -356,6 +354,7 @@ mod tests {
             ]
         );
     }
+
     #[test]
     fn test_lex_string() {
         let mut lexer = Lexer::new();

@@ -1,7 +1,8 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use clap::Clap;
+use jack_analyzer::compile;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clap, Debug)]
 #[clap(name = env!("CARGO_BIN_NAME"), version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"))]
@@ -44,9 +45,11 @@ fn main() -> Result<()> {
         return Err(anyhow!("{:?} is not directory", output_dir));
     }
 
+    println!("{:?}", &jack_files);
+    let engine = compile::Engine::new(jack_files, output_dir);
     match opts.mode {
         Mode::Xml => {
-            todo!();
+            engine.lex_to_xml()?;
         }
     };
 
