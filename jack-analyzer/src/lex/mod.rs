@@ -12,7 +12,7 @@ pub enum LexErrorKind {
     HeadZero,
     #[error("int range [0 .. 32767], actual: {0}")]
     IntOverflow(u64),
-    #[error("end of file")]
+    #[error("unexpected end of file")]
     Eof,
 }
 
@@ -36,7 +36,6 @@ impl LexError {
 pub struct Lexer {
     row: usize,
     col: usize,
-    // tokens: Vec<Token>,
 }
 
 static TAIL_IDENT: &'static [u8] =
@@ -44,11 +43,7 @@ static TAIL_IDENT: &'static [u8] =
 
 impl Lexer {
     pub fn new() -> Self {
-        Self {
-            row: 0,
-            col: 0,
-            // tokens: vec![],
-        }
+        Self { row: 0, col: 0 }
     }
 
     pub fn run(&mut self, input: &str) -> Result<Vec<Token>, LexError> {
@@ -85,16 +80,21 @@ impl Lexer {
                     lex_a_token!(self.symbol(input, pos));
                 }
                 b'/' => {
-                    let next = self.peek(input, pos + 1);
-                    match next {
+                    let (next1, next2) = (self.peek(input, pos + 1), self.peek(input, pos + 2));
+                    match (next1, next2) {
                         // 行の終わりまでコメント
-                        Some(b'/') => {
-                            let p = self.recognize_many(input, pos, |b| !b"\n".contains(&b));
+                        (Some(b'/'), _) => {
+                            let p = self.recognize_many(input, pos, |b| b'\n' != b);
                             pos = p;
                         }
                         // */ までコメント 改行含む (P.198)
-                        Some(b'*') => {
-                            todo!();
+                        (Some(b'*'), Some(b'*')) => {
+                            let (_, p) = self.skip_api_comment(input, pos + 3)?;
+                            pos = p;
+                        }
+                        (Some(b'*'), _) => {
+                            let (_, p) = self.skip_api_comment(input, pos + 2)?;
+                            pos = p;
                         }
                         // 演算子
                         _ => {
@@ -162,6 +162,37 @@ impl Lexer {
 
     fn skip_spaces(&mut self, input: &[u8], start: usize) -> Result<((), usize), LexError> {
         let pos = self.recognize_many(input, start, |b| b" \t".contains(&b));
+        Ok(((), pos))
+    }
+
+    fn skip_api_comment(&mut self, input: &[u8], start: usize) -> Result<((), usize), LexError> {
+        let mut pos = start + 2;
+        while pos < input.len() {
+            match input[pos] {
+                b'*' => {
+                    let next = self.peek(input, pos + 1);
+                    match next {
+                        Some(b'/') => {
+                            self.col += 2;
+                            pos += 2;
+                            break;
+                        }
+                        Some(_) => (),
+                        None => return Err(LexError::eof(Loc::new(self.row, pos))),
+                    }
+                }
+                b'\n' => {
+                    self.row += 1;
+                    self.col = 0;
+                    pos += 1;
+                    continue;
+                }
+                _ => (),
+            }
+            self.col += 1;
+            pos += 1;
+        }
+
         Ok(((), pos))
     }
 
@@ -350,5 +381,42 @@ mod tests {
         let mut lexer = Lexer::new();
         let actual = lexer.run("\"this statement \ncontains new line.\"");
         assert!(actual.is_err(), "unexpected new line");
+    }
+
+    #[test]
+    fn test_lex_comment() {
+        let input = "// this is a line comment\n
+/* this is a comment */ 123\n
+/**this is a comment*/ **\n
+/** * ** *** **** */\n
+/** * ** *** **** *******/\n
+/*\n
+
+        hoge 1234567uujh lplpplplp\n
+*/ //\n
+/**     \n
+
+        hoge 1234567uujh lplpplplp\n
+        oo
+
+**/ //\n
+0\n
+";
+        let mut lexer = Lexer::new();
+        let actual = lexer
+            .run(input)
+            .unwrap()
+            .iter()
+            .map(|ano| ano.value.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual,
+            vec![
+                TokenKind::Int(123),
+                TokenKind::Symbol(Symbol::Asterisk),
+                TokenKind::Symbol(Symbol::Asterisk),
+                TokenKind::Int(0),
+            ]
+        );
     }
 }

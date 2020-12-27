@@ -21,8 +21,8 @@ impl fmt::Display for Loc {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Annot<T> {
-    value: T,
-    loc: Loc,
+    pub value: T,
+    pub loc: Loc,
 }
 
 impl<T> Annot<T> {
