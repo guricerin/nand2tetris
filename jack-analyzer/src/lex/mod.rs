@@ -36,7 +36,7 @@ impl LexError {
 pub struct Lexer {
     row: usize,
     col: usize,
-    tokens: Vec<Token>,
+    // tokens: Vec<Token>,
 }
 
 static TAIL_IDENT: &'static [u8] =
@@ -47,9 +47,10 @@ impl Lexer {
         Self {
             row: 0,
             col: 0,
-            tokens: vec![],
+            // tokens: vec![],
         }
     }
+
     pub fn run(&mut self, input: &str) -> Result<Vec<Token>, LexError> {
         let input = input.as_bytes();
         let mut pos = 0;
@@ -84,11 +85,25 @@ impl Lexer {
                     lex_a_token!(self.symbol(input, pos));
                 }
                 b'/' => {
-                    // todo: slash, comment, line comment
+                    let next = self.peek(input, pos + 1);
+                    match next {
+                        // 行の終わりまでコメント
+                        Some(b'/') => {
+                            let p = self.recognize_many(input, pos, |b| !b"\n".contains(&b));
+                            pos = p;
+                        }
+                        // */ までコメント 改行含む (P.198)
+                        Some(b'*') => {
+                            todo!();
+                        }
+                        // 演算子
+                        _ => {
+                            lex_a_token!(self.symbol(input, pos));
+                        }
+                    }
                 }
                 b'"' => {
-                    // todo: string
-                    // 改行は含まない
+                    lex_a_token!(self.string(input, pos));
                 }
                 b => {
                     // todo ident or keyword
@@ -160,6 +175,7 @@ impl Lexer {
         if input[start] == b'0' && (end - start) > 1 {
             return Err(LexError::head_zero(Loc::new(self.row, start)));
         }
+        // todo: 32768はいいかも。2の補数なので。
         if 32767 < n {
             return Err(LexError::int_overflow(n, Loc::new(self.row, start)));
         };
@@ -194,8 +210,9 @@ impl Lexer {
             b'+' => consume(Symbol::Plus, b)?,
             b'-' => consume(Symbol::Minus, b)?,
             b'*' => consume(Symbol::Asterisk, b)?,
+            b'/' => consume(Symbol::Slash, b)?,
             b'&' => consume(Symbol::And, b)?,
-            b'|' => consume(Symbol::Pipe, b)?,
+            b'|' => consume(Symbol::Or, b)?,
             b'<' => consume(Symbol::Lt, b)?,
             b'>' => consume(Symbol::Gt, b)?,
             b'=' => consume(Symbol::Eq, b)?,
@@ -209,6 +226,25 @@ impl Lexer {
             }
         };
         Ok((tok, end))
+    }
+
+    fn string(&mut self, input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
+        // 左端の " をスキップ
+        let mut pos = start + 1;
+        while pos < input.len() {
+            match input[pos] {
+                b'"' => break,
+                b'\n' => return Err(LexError::invalid_char('\n', Loc::new(self.row, self.col))),
+                _ => (),
+            };
+            pos += 1;
+            self.col += 1;
+        }
+        let end = pos;
+        let s = String::from_utf8(input[start + 1..end].to_vec()).unwrap();
+        let tok = Token::string(&s, Loc::new(self.row, start));
+        // 右端の " をスキップ
+        Ok((tok, end + 1))
     }
 }
 
@@ -257,7 +293,7 @@ mod tests {
     #[test]
     fn test_lex_symbol() {
         let mut lexer = Lexer::new();
-        let actual = lexer.run("{}()[].,;+-*&|<>=~").unwrap();
+        let actual = lexer.run("{}()[].,;+-*/&|<>=~/").unwrap();
         assert_eq!(
             actual,
             vec![
@@ -273,13 +309,46 @@ mod tests {
                 Token::symbol(Symbol::Plus, Loc::new(0, 9)),
                 Token::symbol(Symbol::Minus, Loc::new(0, 10)),
                 Token::symbol(Symbol::Asterisk, Loc::new(0, 11)),
-                Token::symbol(Symbol::And, Loc::new(0, 12)),
-                Token::symbol(Symbol::Pipe, Loc::new(0, 13)),
-                Token::symbol(Symbol::Lt, Loc::new(0, 14)),
-                Token::symbol(Symbol::Gt, Loc::new(0, 15)),
-                Token::symbol(Symbol::Eq, Loc::new(0, 16)),
-                Token::symbol(Symbol::Tilde, Loc::new(0, 17)),
+                Token::symbol(Symbol::Slash, Loc::new(0, 12)),
+                Token::symbol(Symbol::And, Loc::new(0, 13)),
+                Token::symbol(Symbol::Or, Loc::new(0, 14)),
+                Token::symbol(Symbol::Lt, Loc::new(0, 15)),
+                Token::symbol(Symbol::Gt, Loc::new(0, 16)),
+                Token::symbol(Symbol::Eq, Loc::new(0, 17)),
+                Token::symbol(Symbol::Tilde, Loc::new(0, 18)),
+                Token::symbol(Symbol::Slash, Loc::new(0, 19)),
             ]
         );
+    }
+    #[test]
+    fn test_lex_string() {
+        let mut lexer = Lexer::new();
+        let actual = lexer.run("\"{}()[].,;+-*/&|<>=~/\"").unwrap();
+        let expect = Token::string("{}()[].,;+-*/&|<>=~/", Loc::new(0, 0));
+        assert_eq!(actual, vec![expect]);
+
+        let mut lexer = Lexer::new();
+        let actual = lexer
+            .run("\"present day, present time, HAHAHAHAHAHAHAHA\"")
+            .unwrap();
+        let expect = Token::string(
+            "present day, present time, HAHAHAHAHAHAHAHA",
+            Loc::new(0, 0),
+        );
+        assert_eq!(actual, vec![expect]);
+
+        let mut lexer = Lexer::new();
+        let actual = lexer
+            .run("\"  This statement contains 0123456789.  \"")
+            .unwrap();
+        let expect = Token::string("  This statement contains 0123456789.  ", Loc::new(0, 0));
+        assert_eq!(actual, vec![expect]);
+    }
+
+    #[test]
+    fn test_lex_string_err() {
+        let mut lexer = Lexer::new();
+        let actual = lexer.run("\"this statement \ncontains new line.\"");
+        assert!(actual.is_err(), "unexpected new line");
     }
 }

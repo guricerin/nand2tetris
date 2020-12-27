@@ -41,7 +41,7 @@ pub enum Symbol {
     Asterisk,    // *
     Slash,       // /
     And,         // &
-    Pipe,        // |
+    Or,          // |
     Lt,          // <
     Gt,          // >
     Eq,          // =
