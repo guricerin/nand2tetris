@@ -1,52 +1,58 @@
 pub mod token;
 
 use super::types::*;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use token::*;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum LexError {
-    #[error("{0}\ninvalid char: {1}")]
-    InvalidChar(Loc, char),
-    #[error("{0}\nhead 0 number")]
-    HeadZero(Loc),
-    #[error("{0}\nint range [0 .. 32767], actual: {1}")]
-    IntOverflow(Loc, u64),
-    #[error("{0}\nident head number: {1}")]
-    IdentHeadNumber(Loc, char),
-    #[error("{0}\nunexpected end of file")]
-    Eof(Loc),
+    #[error("{0}\n{1}\ninvalid char: {2}")]
+    InvalidChar(PathBuf, Loc, char),
+    #[error("{0}\n{1}\nhead 0 number")]
+    HeadZero(PathBuf, Loc),
+    #[error("{0}\n{1}\nint range [0 .. 32767], actual: {2}")]
+    IntOverflow(PathBuf, Loc, u64),
+    #[error("{0}\n{1}\nident head number: {2}")]
+    IdentHeadNumber(PathBuf, Loc, char),
+    #[error("{0}\n{1}\nunexpected end of file")]
+    Eof(PathBuf, Loc),
 }
 
 impl LexError {
-    pub fn invalid_char(c: char, loc: Loc) -> Self {
-        Self::InvalidChar(loc, c)
+    pub fn invalid_char(path: &PathBuf, c: char, loc: Loc) -> Self {
+        Self::InvalidChar(path.to_owned(), loc, c)
     }
-    pub fn head_zero(loc: Loc) -> Self {
-        Self::HeadZero(loc)
+    pub fn head_zero(path: &PathBuf, loc: Loc) -> Self {
+        Self::HeadZero(path.to_owned(), loc)
     }
-    pub fn int_overflow(n: u64, loc: Loc) -> Self {
-        Self::IntOverflow(loc, n)
+    pub fn int_overflow(path: &PathBuf, n: u64, loc: Loc) -> Self {
+        Self::IntOverflow(path.to_owned(), loc, n)
     }
-    pub fn ident_head_number(c: char, loc: Loc) -> Self {
-        Self::IdentHeadNumber(loc, c)
+    pub fn ident_head_number(path: &PathBuf, c: char, loc: Loc) -> Self {
+        Self::IdentHeadNumber(path.to_owned(), loc, c)
     }
-    pub fn eof(loc: Loc) -> Self {
-        Self::Eof(loc)
+    pub fn eof(path: &PathBuf, loc: Loc) -> Self {
+        Self::Eof(path.to_owned(), loc)
     }
 }
 
 pub struct Lexer {
     row: usize,
     col: usize,
+    file_path: PathBuf,
 }
 
 static TAIL_IDENT: &'static [u8] =
     b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
 
 impl Lexer {
-    pub fn new() -> Self {
-        Self { row: 0, col: 0 }
+    pub fn new(path: &PathBuf) -> Self {
+        Self {
+            row: 0,
+            col: 0,
+            file_path: path.to_owned(),
+        }
     }
 
     pub fn run(&mut self, input: &str) -> Result<Vec<Token>, LexError> {
@@ -132,10 +138,11 @@ impl Lexer {
         expect: u8,
     ) -> Result<(u8, usize), LexError> {
         if input.len() <= pos {
-            return Err(LexError::eof(Loc::new(self.row, self.col)));
+            return Err(LexError::eof(&self.file_path, Loc::new(self.row, self.col)));
         }
         if input[pos] != expect {
             return Err(LexError::invalid_char(
+                &self.file_path,
                 input[pos] as char,
                 Loc::new(self.row, self.col),
             ));
@@ -177,7 +184,12 @@ impl Lexer {
                             break;
                         }
                         Some(_) => (),
-                        None => return Err(LexError::eof(Loc::new(self.row, self.col))),
+                        None => {
+                            return Err(LexError::eof(
+                                &self.file_path,
+                                Loc::new(self.row, self.col),
+                            ))
+                        }
                     }
                 }
                 b'\n' => {
@@ -203,11 +215,18 @@ impl Lexer {
 
         // 先頭が0の数値は認めない
         if input[start] == b'0' && (end - start) > 1 {
-            return Err(LexError::head_zero(Loc::new(self.row, self.col)));
+            return Err(LexError::head_zero(
+                &self.file_path,
+                Loc::new(self.row, self.col),
+            ));
         }
         // todo: 32768はいいかも。2の補数なので。
         if 32767 < n {
-            return Err(LexError::int_overflow(n, Loc::new(self.row, self.col)));
+            return Err(LexError::int_overflow(
+                &self.file_path,
+                n,
+                Loc::new(self.row, self.col),
+            ));
         };
 
         let tok = Token::int(n as u16, Loc::new(self.row, self.col));
@@ -250,6 +269,7 @@ impl Lexer {
             _ => {
                 // unreachable!();
                 return Err(LexError::invalid_char(
+                    &self.file_path,
                     b as char,
                     Loc::new(self.row, self.col),
                 ));
@@ -264,7 +284,13 @@ impl Lexer {
         while pos < input.len() {
             match input[pos] {
                 b'"' => break,
-                b'\n' => return Err(LexError::invalid_char('?', Loc::new(self.row, self.col))),
+                b'\n' => {
+                    return Err(LexError::invalid_char(
+                        &self.file_path,
+                        '?',
+                        Loc::new(self.row, self.col),
+                    ))
+                }
                 _ => (),
             };
             pos += 1;
@@ -280,6 +306,7 @@ impl Lexer {
     fn keyword_or_ident(&mut self, input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
         if input[start].is_ascii_digit() {
             return Err(LexError::ident_head_number(
+                &self.file_path,
                 input[start] as char,
                 Loc::new(self.row, self.col),
             ));
@@ -298,7 +325,7 @@ mod tests {
     use super::*;
 
     fn lex_to_tokenkind(input: &str) -> Vec<TokenKind> {
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         lexer
             .run(input)
             .unwrap()
@@ -309,22 +336,22 @@ mod tests {
 
     #[test]
     fn test_lex_number() {
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("1").unwrap();
         let expect = Token::int(1, Loc::new(0, 1));
         assert_eq!(actual, vec![expect]);
 
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("0").unwrap();
         let expect = Token::int(0, Loc::new(0, 1));
         assert_eq!(actual, vec![expect]);
 
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("10").unwrap();
         let expect = Token::int(10, Loc::new(0, 2));
         assert_eq!(actual, vec![expect]);
 
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("32767").unwrap();
         let expect = Token::int(32767, Loc::new(0, 5));
         assert_eq!(actual, vec![expect]);
@@ -332,15 +359,15 @@ mod tests {
 
     #[test]
     fn test_lex_number_err() {
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("01");
         assert!(actual.is_err(), "head zero");
 
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("00");
         assert!(actual.is_err(), "head zero");
 
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("32768");
         assert!(actual.is_err(), "overflow");
     }
@@ -401,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_lex_string_err() {
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("\"this statement \ncontains new line.\"");
         assert!(actual.is_err(), "unexpected new line");
     }
@@ -425,7 +452,7 @@ mod tests {
 **/ //\n
 0\n
 ";
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer
             .run(input)
             .unwrap()
@@ -445,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_comment_last_dq() {
-        let mut lexer = Lexer::new();
+        let mut lexer = Lexer::new(&PathBuf::from("hoge"));
         let actual = lexer.run("// hoge \"\n").unwrap();
         assert_eq!(actual, vec![]);
     }

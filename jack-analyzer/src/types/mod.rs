@@ -15,7 +15,7 @@ impl Loc {
 
 impl fmt::Display for Loc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Line: {}, Col: {}", self.row, self.col)
+        write!(f, "Line: {}, Col: {}", self.row + 1, self.col + 1)
     }
 }
 
@@ -28,5 +28,11 @@ pub struct Annot<T> {
 impl<T> Annot<T> {
     pub fn new(value: T, loc: Loc) -> Self {
         Self { value, loc }
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for Annot<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}\n{}", self.loc, self.value)
     }
 }

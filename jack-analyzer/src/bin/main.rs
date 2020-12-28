@@ -17,7 +17,8 @@ struct Opts {
 
 #[derive(Clap, Debug)]
 enum Mode {
-    Xml,
+    Txml, // token to xml
+    Axml, // ast to xml
 }
 
 fn main() -> Result<()> {
@@ -47,8 +48,11 @@ fn main() -> Result<()> {
 
     let engine = compilation::Engine::new(jack_files, output_dir);
     match opts.mode {
-        Mode::Xml => {
+        Mode::Txml => {
             engine.lex_to_xml()?;
+        }
+        Mode::Axml => {
+            todo!();
         }
     };
 

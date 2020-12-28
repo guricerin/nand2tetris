@@ -22,7 +22,7 @@ function run-cargo($arg) {
 
 function lex_xml_test($path) {
     # remake output dir
-    $output_dir = Join-Path $PSScriptRoot "output"
+    $output_dir = Join-Path $PSScriptRoot "output/lex"
     if (Test-Path $output_dir) {
         Remove-Item $output_dir -Recurse -Force
     }
@@ -54,6 +54,12 @@ function lex_xml_test($path) {
 
 function main() {
     run-cargo("test")
+
+    $output_dir = Join-Path $PSScriptRoot "output"
+    if (Test-Path $output_dir) {
+        Remove-Item $output_dir -Recurse -Force
+    }
+    mkdir $output_dir
 
     $script:success = @()
     $script:fail = @()

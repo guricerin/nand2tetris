@@ -1,4 +1,5 @@
 use crate::types::*;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Keyword {
@@ -25,6 +26,35 @@ pub enum Keyword {
     Return,
 }
 
+impl fmt::Display for Keyword {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::Keyword::*;
+        match self {
+            Class => write!(f, "class"),
+            Constructor => write!(f, "constructor"),
+            Func => write!(f, "function"),
+            Method => write!(f, "method"),
+            Field => write!(f, "field"),
+            Static => write!(f, "static"),
+            Var => write!(f, "var"),
+            Int => write!(f, "int"),
+            Char => write!(f, "char"),
+            Bool => write!(f, "boolean"),
+            Void => write!(f, "void"),
+            True => write!(f, "true"),
+            False => write!(f, "false"),
+            Null => write!(f, "null"),
+            This => write!(f, "this"),
+            Let => write!(f, "let"),
+            Do => write!(f, "do"),
+            If => write!(f, "if"),
+            Else => write!(f, "else"),
+            While => write!(f, "while"),
+            Return => write!(f, "return"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Symbol {
     RCurlyParen, // {
@@ -48,32 +78,54 @@ pub enum Symbol {
     Tilde,       // ~
 }
 
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::Symbol::*;
+        match self {
+            LCurlyParen => write!(f, "{{"),
+            RCurlyParen => write!(f, "}}"),
+            LParen => write!(f, "("),
+            RParen => write!(f, ")"),
+            LSqParen => write!(f, "["),
+            RSqParen => write!(f, "]"),
+            Dot => write!(f, "."),
+            Comma => write!(f, ","),
+            SemiColon => write!(f, ";"),
+            Plus => write!(f, "+"),
+            Minus => write!(f, "-"),
+            Asterisk => write!(f, "*"),
+            Slash => write!(f, "/"),
+            And => write!(f, "&"),
+            Or => write!(f, "|"),
+            Lt => write!(f, "<"),
+            Gt => write!(f, ">"),
+            Eq => write!(f, "="),
+            Tilde => write!(f, "~"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     Keyword(Keyword),
     Symbol(Symbol),
     Int(u16),
-    String(String),
-    Ident(String),
+    String(String), // ""で囲まれたリテラル文字列
+    Ident(String),  // 変数名など
 }
 
-// impl Token {
-//     pub fn keyword(k: Keyword) -> Self {
-//         Self::Keyword(k)
-//     }
-//     pub fn symbol(s: Symbol) -> Self {
-//         Self::Symbol(s)
-//     }
-//     pub fn int(n: u16) -> Self {
-//         Self::Int(n)
-//     }
-//     pub fn string(s: &str) -> Self {
-//         Self::String(s.to_owned())
-//     }
-//     pub fn ident(s: &str) -> Self {
-//         Self::Ident(s.to_owned())
-//     }
-// }
+impl fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::TokenKind::*;
+        match self {
+            Keyword(s) => s.fmt(f),
+            Symbol(s) => s.fmt(f),
+            Int(s) => s.fmt(f),
+            String(s) => s.fmt(f),
+            Ident(s) => s.fmt(f),
+        }
+    }
+}
 
 pub type Token = Annot<TokenKind>;
 
