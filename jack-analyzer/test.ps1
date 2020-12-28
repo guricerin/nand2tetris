@@ -30,10 +30,7 @@ function lex_xml_test($path) {
 
     # cargo run
     $target_dir = Join-Path $PSScriptRoot $path
-    Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run --release -- $target_dir -o $output_dir xml" -Wait
-
-    $success = @()
-    $fail = @()
+    Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run --release -- $target_dir -o $output_dir txml" -Wait
 
     Get-ChildItem $target_dir -File -Recurse -Include *.jack | ForEach-Object {
         $target = $_.FullName
@@ -47,23 +44,19 @@ function lex_xml_test($path) {
         $res = Start-Process $cmd -WorkingDirectory $PSScriptRoot -ArgumentList $arg -Wait -NoNewWindow -PassThru
         $res = $res.ExitCode -eq 0
         if ($res) {
-            $success += $target
+            $script:success += "  [o] lex_xml_test: $target"
         }
         else {
-            $fail += $target
+            $script:fail += "  [x] lex_xml_test: $target"
         }
-    }
-
-    $success | ForEach-Object {
-        Write-Host "  [o] lex_xml_test: $_" -ForegroundColor Green
-    }
-    $fail | ForEach-Object {
-        Write-Host "  [x] lex_xml_test: $_" -ForegroundColor Red
     }
 }
 
 function main() {
     run-cargo("test")
+
+    $script:success = @()
+    $script:fail = @()
 
     @(
         "../10-compiler1-syntax-analysis/ArrayTest"
@@ -71,6 +64,14 @@ function main() {
         "../10-compiler1-syntax-analysis/Square"
     ) | ForEach-Object {
         lex_xml_test $_
+    }
+
+    Write-Host
+    $script:success | ForEach-Object {
+        Write-Host "$_" -ForegroundColor Green
+    }
+    $script:fail | ForEach-Object {
+        Write-Host "$_" -ForegroundColor Red
     }
 }
 
