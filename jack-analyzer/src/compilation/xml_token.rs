@@ -49,12 +49,12 @@ fn keyword(key: Keyword) -> String {
 fn sym(symbol: Symbol) -> String {
     use Symbol::*;
     let x = match symbol {
-        RCurlyParen => "{",
-        LCurlyParen => "}",
-        RParen => "(",
-        LParen => ")",    // )
-        RSqParen => "[",  // [
-        LSqParen => "]",  // ]
+        LCurlyParen => "{",
+        RCurlyParen => "}",
+        LParen => "(",
+        RParen => ")",    // )
+        LSqParen => "[",  // [
+        RSqParen => "]",  // ]
         Dot => ".",       // .
         Comma => ",",     // ,
         SemiColon => ";", // ;

@@ -61,7 +61,8 @@ impl Engine {
     }
 
     fn replace_path_to_output(&self, path: &PathBuf, ext: &str) -> PathBuf {
-        let name = path.file_name().unwrap();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let name = name.replace(".jack", "T");
         self.output_dir.join(name).with_extension(ext)
     }
 }
