@@ -23,24 +23,29 @@ function run-cargo($arg) {
 function lex_xml_test($path) {
     # remake output dir
     $output_dir = Join-Path $PSScriptRoot "output"
-    Remove-Item $output_dir -Recurse -Force
+    if (Test-Path $output_dir) {
+        Remove-Item $output_dir -Recurse -Force
+    }
     mkdir $output_dir
 
     # cargo run
     $target_dir = Join-Path $PSScriptRoot $path
-    $name = Split-Path $target_dir -Leaf
-    Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run --release -- $target_dir -o $output_dir xml" -Wait -NoNewWindow
+    Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run --release -- $target_dir -o $output_dir xml" -Wait
 
     $success = @()
     $fail = @()
 
-    Get-ChildItem $target_dir -Include ".jack" | ForEach-Object {
+    Get-ChildItem $target_dir -File -Recurse -Include *.jack | ForEach-Object {
         $target = $_.FullName
         $target = $target.Replace(".jack", "T.xml")
+
+        $output = Split-Path $target -Leaf
+        $output = Join-Path $output_dir $output
+
         $cmd = "cmd.exe"
-        $arg = "/c  $DIFF_TOOL $target_dir/$target $output_dir/$target"
-        $proc = Start-Process $cmd -WorkingDirectory $PSScriptRoot -ArgumentList $arg -Wait -PassThru -NoNewWindow
-        $res = $proc.ExitCode -eq 0
+        $arg = "/c  $DIFF_TOOL $target $output"
+        $res = Start-Process $cmd -WorkingDirectory $PSScriptRoot -ArgumentList $arg -Wait -NoNewWindow -PassThru
+        $res = $res.ExitCode -eq 0
         if ($res) {
             $success += $target
         }
@@ -50,10 +55,10 @@ function lex_xml_test($path) {
     }
 
     $success | ForEach-Object {
-        Write-Host "  [o] $_" -ForegroundColor Green
+        Write-Host "  [o] lex_xml_test: $_" -ForegroundColor Green
     }
     $fail | ForEach-Object {
-        Write-Host "  [x] $_" -ForegroundColor Red
+        Write-Host "  [x] lex_xml_test: $_" -ForegroundColor Red
     }
 }
 
