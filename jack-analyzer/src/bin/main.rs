@@ -52,7 +52,7 @@ fn main() -> Result<()> {
             engine.lex_to_xml()?;
         }
         Mode::Axml => {
-            todo!();
+            engine.parse_to_xml()?;
         }
     };
 

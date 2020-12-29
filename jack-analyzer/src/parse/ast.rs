@@ -146,7 +146,7 @@ pub enum Stmt {
         body: Stmts,
     },
     Do {
-        subroutine_call: Expr,
+        subroutine_call: SubRoutineCall,
     },
     Return {
         value: Option<Expr>,
@@ -172,11 +172,20 @@ pub enum Term {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SubRoutineCall {
-    pub name: Ident,
-    pub receiver: Option<Ident>,
-    pub exprs: Vec<Expr>,
+pub enum SubRoutineCall {
+    Func {
+        name: Ident,
+        exprs: ExprList,
+    },
+    Method {
+        reciever: Ident,
+        name: Ident,
+        exprs: ExprList,
+    },
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExprList(pub Option<(Expr, Vec<Expr>)>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOp {

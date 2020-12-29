@@ -1,3 +1,4 @@
+mod xml_asm;
 mod xml_token;
 
 use crate::lex;
@@ -50,9 +51,10 @@ impl Engine {
             let jack_code = fs::read_to_string(jack_file)?;
             let tokens = lex::Lexer::new(jack_file).run(&jack_code)?;
             let ast = parse::Parser::new(jack_file).run(tokens)?;
-            todo!();
+            let xml = xml_asm::translate(&ast);
+            let _ = self.write_file(jack_file, xml, Mode::Parse)?;
         }
-        todo!();
+        Ok(())
     }
 
     fn write_file(

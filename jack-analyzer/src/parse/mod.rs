@@ -1,4 +1,4 @@
-mod ast;
+pub mod ast;
 mod expression;
 mod statement;
 
@@ -31,7 +31,7 @@ impl Parser {
 
     pub fn run(&self, tokens: Vec<Token>) -> Result<Ast, ParseError> {
         let mut tokens = tokens.into_iter().peekable();
-        self.ast(&mut tokens)
+        self.past(&mut tokens)
     }
 
     fn unexpected_token(&self, tok: Token) -> ParseError {
@@ -44,11 +44,11 @@ impl Parser {
         ParseError::RedundantToken(self.file_path.to_owned(), tok)
     }
 
-    fn ast<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Ast, ParseError>
+    fn past<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Ast, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
-        let class = self.class(tokens)?;
+        let class = self.pclass(tokens)?;
         match tokens.next() {
             None => Ok(Ast { class }),
             // 1ファイル1クラス想定
@@ -56,7 +56,7 @@ impl Parser {
         }
     }
 
-    fn class<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Class, ParseError>
+    fn pclass<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Class, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
@@ -67,13 +67,13 @@ impl Parser {
             }) => {
                 tokens.next();
                 // class name
-                let name = self.ident(tokens)?;
+                let name = self.pident(tokens)?;
                 // {
                 let _ = self.skip_symbol(tokens, Symbol::LCurlyParen)?;
                 // vardec*
                 let mut var_decs = vec![];
                 loop {
-                    match self.class_var_dec(tokens) {
+                    match self.pclass_var_dec(tokens) {
                         Ok(decs) => {
                             var_decs.push(decs);
                         }
@@ -83,7 +83,7 @@ impl Parser {
                 // subroutinedec*
                 let mut subroutine_decs = vec![];
                 loop {
-                    match self.subroutine_dec(tokens) {
+                    match self.psubroutine_dec(tokens) {
                         Ok(decs) => {
                             subroutine_decs.push(decs);
                         }
@@ -99,7 +99,7 @@ impl Parser {
         }
     }
 
-    fn ident<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Ident, ParseError>
+    fn pident<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Ident, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
@@ -133,7 +133,7 @@ impl Parser {
         Ok(())
     }
 
-    fn class_var_dec<Tokens>(
+    fn pclass_var_dec<Tokens>(
         &self,
         tokens: &mut Peekable<Tokens>,
     ) -> Result<ClassVarDec, ParseError>
@@ -153,17 +153,17 @@ impl Parser {
         })?;
         tokens.next();
 
-        let ty = self.ty(tokens)?;
-        let name = self.ident(tokens)?;
-        // , と identをとれるだけとる
+        let ty = self.pty(tokens)?;
+        let name = self.pident(tokens)?;
+        // (, ident)*
         let mut names = vec![];
         loop {
             match self.skip_symbol(tokens, Symbol::Comma) {
-                Ok(()) => match self.ident(tokens) {
+                Ok(()) => match self.pident(tokens) {
                     Ok(ident) => {
                         names.push(ident);
                     }
-                    // , の次は varnameであるべき
+                    // , の次はvarnameであるべき
                     Err(e) => return Err(e),
                 },
                 Err(_) => break,
@@ -174,7 +174,7 @@ impl Parser {
         Ok(res)
     }
 
-    fn ty<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Type, ParseError>
+    fn pty<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Type, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
@@ -199,7 +199,7 @@ impl Parser {
         Ok(ty)
     }
 
-    fn subroutine_dec<Tokens>(
+    fn psubroutine_dec<Tokens>(
         &self,
         tokens: &mut Peekable<Tokens>,
     ) -> Result<SubRoutineDec, ParseError>
@@ -239,32 +239,35 @@ impl Parser {
         })?;
         tokens.next();
 
-        let name = self.ident(tokens)?;
+        let name = self.pident(tokens)?;
         // (
         let _ = self.skip_symbol(tokens, Symbol::LParen)?;
-        let params = self.parameter_list(tokens)?;
+        let params = self.pparameter_list(tokens)?;
         // )
         let _ = self.skip_symbol(tokens, Symbol::RParen)?;
-        let body = self.subroutine_body(tokens)?;
+        let body = self.psubroutine_body(tokens)?;
 
         let res = SubRoutineDec::new(modifier, ty, name, params, body);
         Ok(res)
     }
 
-    fn param<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Param, ParseError>
+    fn pparam<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Param, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
-        let ty = self.ty(tokens)?;
-        let var_name = self.ident(tokens)?;
+        let ty = self.pty(tokens)?;
+        let var_name = self.pident(tokens)?;
         Ok(Param(ty, var_name))
     }
 
-    fn parameter_list<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<ParamList, ParseError>
+    fn pparameter_list<Tokens>(
+        &self,
+        tokens: &mut Peekable<Tokens>,
+    ) -> Result<ParamList, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
-        let head = self.param(tokens).ok();
+        let head = self.pparam(tokens).ok();
         match head {
             None => return Ok(ParamList(None)),
             Some(_) => (),
@@ -274,7 +277,7 @@ impl Parser {
         let mut tail = vec![];
         loop {
             match self.skip_symbol(tokens, Symbol::Comma) {
-                Ok(_) => match self.param(tokens) {
+                Ok(_) => match self.pparam(tokens) {
                     Ok(param) => {
                         tail.push(param);
                     }
@@ -287,7 +290,7 @@ impl Parser {
         Ok(ParamList(Some((head.unwrap(), tail))))
     }
 
-    fn subroutine_body<Tokens>(
+    fn psubroutine_body<Tokens>(
         &self,
         tokens: &mut Peekable<Tokens>,
     ) -> Result<SubRoutineBody, ParseError>
@@ -299,19 +302,19 @@ impl Parser {
         // vardec*
         let mut var_decs = vec![];
         loop {
-            match self.var_dec(tokens) {
+            match self.pvar_dec(tokens) {
                 Ok(var_dec) => var_decs.push(var_dec),
                 Err(_) => break,
             }
         }
-        let stmts = self.stmts(tokens)?;
+        let stmts = self.pstmts(tokens)?;
         // }
         let _ = self.skip_symbol(tokens, Symbol::RCurlyParen)?;
         let res = SubRoutineBody::new(var_decs, stmts);
         Ok(res)
     }
 
-    fn var_dec<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<VarDec, ParseError>
+    fn pvar_dec<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<VarDec, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
@@ -328,13 +331,13 @@ impl Parser {
         })?;
         tokens.next();
 
-        let ty = self.ty(tokens)?;
-        let name = self.ident(tokens)?;
+        let ty = self.pty(tokens)?;
+        let name = self.pident(tokens)?;
         let mut names = vec![];
         // (, varname)*
         loop {
             match self.skip_symbol(tokens, Symbol::Comma) {
-                Ok(()) => match self.ident(tokens) {
+                Ok(()) => match self.pident(tokens) {
                     Ok(ident) => {
                         names.push(ident);
                     }
