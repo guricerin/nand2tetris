@@ -42,13 +42,37 @@ fn class_var_decs(decs: &Vec<ClassVarDec>) -> String {
     decs.iter().map(|d| class_var_dec(d)).collect::<_>()
 }
 
+fn classmodi(m: &ClassVarModifier) -> String {
+    let m = match m {
+        ClassVarModifier::Field => "field",
+        ClassVarModifier::Static => "static",
+    };
+    format!("<keyword> {} </keyword>", m)
+}
+
+fn idents(ls: &Vec<Ident>) -> String {
+    let mut buf = String::new();
+    for l in ls.iter() {
+        buf = format!("{}\n<symbol> , </symbol>\n{}\n", buf, ident(l));
+    }
+    buf
+}
+
 fn class_var_dec(dec: &ClassVarDec) -> String {
-    todo!();
     format!(
         r#"
 <classVarDec>
+{}
+{}
+{}
+{}
+<symbol> ; </symbol>
 </classVarDec>
-    "#
+    "#,
+        classmodi(&dec.modifier),
+        ty(&dec.ty),
+        ident(&dec.name),
+        idents(&dec.names),
     )
 }
 

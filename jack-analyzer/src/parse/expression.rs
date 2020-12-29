@@ -209,7 +209,9 @@ impl Parser {
     {
         tokens.next();
         // name ( expr )
-        let _ = self.skip_symbol(tokens, Symbol::LParen)?;
+        // todo: do hoge(); の形がパースできない
+        // pexpr_listで () を消費していることが原因か？
+        //let _ = self.skip_symbol(tokens, Symbol::LParen)?;
         let exprs = self.pexpr_list(tokens)?;
         let _ = self.skip_symbol(tokens, Symbol::RParen)?;
         Ok(SubRoutineCall::Func { name, exprs })
