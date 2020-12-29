@@ -10,11 +10,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ParseError {
-    #[error("{0}\n unexpected token\n{1}")]
+    #[error("unexpected token\nFile: {0}\n{1}")]
     UnexpectedToken(PathBuf, Token),
-    #[error("{0} unexpected eof")]
+    #[error("unexpected eof\nFile: {0}")]
     Eof(PathBuf),
-    #[error("{0}\n redundant token\n{1}")]
+    #[error("redundant token\nFile: {0}\n{1}")]
     RedundantToken(PathBuf, Token),
 }
 
@@ -367,8 +367,54 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_class() {
+    fn test_parse_empty_class() {
         let actual = parse("\nclass akashikeyanage{ } \n");
+        let expect = Class::new(Ident("akashikeyanage".to_owned()), vec![], vec![]);
+        assert_eq!(actual, Ast { class: expect });
+    }
+
+    #[test]
+    #[ignore]
+    fn test_parse_expressionless_class() {
+        let input = r#"
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/10/ExpressionLessSquare/Main.jack
+
+/** Expressionless version of projects/10/Square/Main.jack. */
+
+class Main {
+    static boolean test;    // Added for testing -- there is no static keyword
+                            // in the Square files.
+
+    function void main() {
+        var SquareGame game;
+        let game = game;
+        do game.run();
+        do game.dispose();
+        return;
+    }
+
+    function void test() {  // Added to test Jack syntax that is not use in
+        var int i, j;       // the Square files.
+        var String s;
+        var Array a;
+        if (i) {
+            let s = i;
+            let s = j;
+            let a[i] = j;
+        }
+        else {              // There is no else keyword in the Square files.
+            let i = i;
+            let j = j;
+            let i = i | j;
+        }
+        return;
+    }
+}
+        "#;
+        let actual = parse(input);
         let expect = Class::new(Ident("akashikeyanage".to_owned()), vec![], vec![]);
         assert_eq!(actual, Ast { class: expect });
     }

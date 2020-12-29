@@ -39,10 +39,7 @@ function lex_xml_test($path) {
         $output = Split-Path $target -Leaf
         $output = Join-Path $output_dir $output
 
-        $cmd = "cmd.exe"
-        $arg = "/c  $DIFF_TOOL $target $output"
-        $res = Start-Process $cmd -WorkingDirectory $PSScriptRoot -ArgumentList $arg -Wait -NoNewWindow -PassThru
-        $res = $res.ExitCode -eq 0
+        $res = diff-test $target $output
         if ($res) {
             $script:success += "  [o] lex_xml_test: $target"
         }
@@ -50,6 +47,40 @@ function lex_xml_test($path) {
             $script:fail += "  [x] lex_xml_test: $target"
         }
     }
+}
+
+function parse_xml_test($path) {
+    # remake output dir
+    $output_dir = Join-Path $PSScriptRoot "output/parse"
+    if (Test-Path $output_dir) {
+        Remove-Item $output_dir -Recurse -Force
+    }
+    mkdir $output_dir
+
+    # cargo run
+    $target_dir = Join-Path $PSScriptRoot $path
+    Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run --release -- $target_dir -o $output_dir axml" -Wait
+
+    Get-ChildItem $target_dir -File -Recurse -Include *.jack | ForEach-Object {
+        $target = $_.FullName
+        $target = $target.Replace(".jack", ".xml")
+
+        $output = Split-Path $target -Leaf
+        $output = Join-Path $output_dir $output
+
+        $res = diff-test $target $output
+        if ($res) {
+            $script:success += "  [o] parse_xml_test: $target"
+        }
+        else {
+            $script:fail += "  [x] parse_xml_test: $target"
+        }
+    }
+}
+
+function diff-test($target, $output) {
+    # batファイルはこうやって実行させないと戻り値を取得できない
+    return cmd.exe /c $DIFF_TOOL $target $output
 }
 
 function main() {
@@ -65,11 +96,12 @@ function main() {
     $script:fail = @()
 
     @(
-        "../10-compiler1-syntax-analysis/ArrayTest"
         "../10-compiler1-syntax-analysis/ExpressionLessSquare"
+        "../10-compiler1-syntax-analysis/ArrayTest"
         "../10-compiler1-syntax-analysis/Square"
     ) | ForEach-Object {
         lex_xml_test $_
+        parse_xml_test $_
     }
 
     Write-Host

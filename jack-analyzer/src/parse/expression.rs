@@ -147,17 +147,6 @@ impl Parser {
         Ok(Term::Indexer(var_name, indexer))
     }
 
-    // fun(arg) | objext.method(arg)
-    pub fn psubroutine_call<Tokens>(
-        &self,
-        tokens: &mut Peekable<Tokens>,
-    ) -> Result<SubRoutineCall, ParseError>
-    where
-        Tokens: Iterator<Item = Token>,
-    {
-        self.pfunc_call(tokens).or(self.pmethod_call(tokens))
-    }
-
     fn pexpr_list<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<ExprList, ParseError>
     where
         Tokens: Iterator<Item = Token>,
@@ -185,14 +174,41 @@ impl Parser {
         Ok(ExprList(Some((head.unwrap(), tail))))
     }
 
-    fn pfunc_call<Tokens>(
+    // fun(arg) | objext.method(arg)
+    pub fn psubroutine_call<Tokens>(
         &self,
         tokens: &mut Peekable<Tokens>,
     ) -> Result<SubRoutineCall, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
-        let name = self.pident(tokens)?;
+        let ident = self.pident(tokens)?;
+        match tokens.peek() {
+            Some(tok) => match tok {
+                Token {
+                    value: TokenKind::Symbol(s),
+                    ..
+                } => match s {
+                    Symbol::LParen => self.pfunc_call(tokens, ident),
+                    Symbol::Dot => self.pmethod_call(tokens, ident),
+                    _ => Err(self.unexpected_token(tok.clone())),
+                },
+                _ => Err(self.unexpected_token(tok.clone())),
+            },
+            None => Err(self.eof()),
+        }
+    }
+
+    fn pfunc_call<Tokens>(
+        &self,
+        tokens: &mut Peekable<Tokens>,
+        name: Ident,
+    ) -> Result<SubRoutineCall, ParseError>
+    where
+        Tokens: Iterator<Item = Token>,
+    {
+        tokens.next();
+        // name ( expr )
         let _ = self.skip_symbol(tokens, Symbol::LParen)?;
         let exprs = self.pexpr_list(tokens)?;
         let _ = self.skip_symbol(tokens, Symbol::RParen)?;
@@ -202,12 +218,13 @@ impl Parser {
     fn pmethod_call<Tokens>(
         &self,
         tokens: &mut Peekable<Tokens>,
+        reciever: Ident,
     ) -> Result<SubRoutineCall, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
-        let reciever = self.pident(tokens)?;
-        let _ = self.skip_symbol(tokens, Symbol::Dot)?;
+        tokens.next();
+        // reciever.method(expr)
         let name = self.pident(tokens)?;
         let _ = self.skip_symbol(tokens, Symbol::LParen)?;
         let exprs = self.pexpr_list(tokens)?;

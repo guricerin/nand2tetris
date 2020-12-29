@@ -95,6 +95,14 @@ impl Parser {
         let _ = self.skip_symbol(tokens, Symbol::RCurlyParen)?;
 
         let mut pelse = || -> Result<Stmts, ParseError> {
+            tokens.peek().ok_or(self.eof()).and_then(|tok| match tok {
+                Token {
+                    value: TokenKind::Keyword(Keyword::Else),
+                    ..
+                } => Ok(()),
+                _ => Err(self.unexpected_token(tok.clone())),
+            })?;
+            tokens.next();
             let _ = self.skip_symbol(tokens, Symbol::LCurlyParen)?;
             let alt = self.pstmts(tokens)?;
             let _ = self.skip_symbol(tokens, Symbol::RCurlyParen)?;
