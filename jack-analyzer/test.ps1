@@ -20,7 +20,7 @@ function run-cargo($arg) {
     print-result -success $res "$cmd $arg"
 }
 
-function lex_xml_test($path) {
+function lex-xml-test($path) {
     # remake output dir
     $output_dir = Join-Path $PSScriptRoot "output/lex"
     if (Test-Path $output_dir) {
@@ -49,7 +49,7 @@ function lex_xml_test($path) {
     }
 }
 
-function parse_xml_test($path) {
+function parse-xml-test($path) {
     # remake output dir
     $output_dir = Join-Path $PSScriptRoot "output/parse"
     if (Test-Path $output_dir) {
@@ -100,8 +100,8 @@ function main() {
         "../10-compiler1-syntax-analysis/ArrayTest"
         "../10-compiler1-syntax-analysis/Square"
     ) | ForEach-Object {
-        lex_xml_test $_
-        parse_xml_test $_
+        lex-xml-test $_
+        parse-xml-test $_
     }
 
     Write-Host

@@ -188,7 +188,6 @@ impl Parser {
                 Keyword::Char => Ok(Type::Char),
                 _ => Err(self.unexpected_token(tok.clone())),
             },
-            // todo: 自信ない
             Token {
                 value: TokenKind::Ident(s),
                 ..
@@ -369,52 +368,6 @@ mod tests {
     #[test]
     fn test_parse_empty_class() {
         let actual = parse("\nclass akashikeyanage{ } \n");
-        let expect = Class::new(Ident("akashikeyanage".to_owned()), vec![], vec![]);
-        assert_eq!(actual, Ast { class: expect });
-    }
-
-    #[test]
-    #[ignore]
-    fn test_parse_expressionless_class() {
-        let input = r#"
-// This file is part of www.nand2tetris.org
-// and the book "The Elements of Computing Systems"
-// by Nisan and Schocken, MIT Press.
-// File name: projects/10/ExpressionLessSquare/Main.jack
-
-/** Expressionless version of projects/10/Square/Main.jack. */
-
-class Main {
-    static boolean test;    // Added for testing -- there is no static keyword
-                            // in the Square files.
-
-    function void main() {
-        var SquareGame game;
-        let game = game;
-        do game.run();
-        do game.dispose();
-        return;
-    }
-
-    function void test() {  // Added to test Jack syntax that is not use in
-        var int i, j;       // the Square files.
-        var String s;
-        var Array a;
-        if (i) {
-            let s = i;
-            let s = j;
-            let a[i] = j;
-        }
-        else {              // There is no else keyword in the Square files.
-            let i = i;
-            let j = j;
-            let i = i | j;
-        }
-        return;
-    }
-}
-        "#;
-        let actual = parse(input);
         let expect = Class::new(Ident("akashikeyanage".to_owned()), vec![], vec![]);
         assert_eq!(actual, Ast { class: expect });
     }

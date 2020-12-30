@@ -44,19 +44,38 @@ impl Parser {
         self.pint_const(tokens)
             .or(self.pstring_const(tokens))
             .or(self.pkeyword_const(tokens))
-            .or(self.pterm_varname(tokens))
-            .or(self.pterm_indexer(tokens))
-            .or(self.pterm_sub(tokens))
+            // pterm_varnameでpidentを使ってidentを消費しているので、indexer, subcallとまとめる必要あり
+            .or(self.pterm_varname_or_indexer_or_sub(tokens))
             .or(self.pterm_expr(tokens))
             .or(self.pterm_unary(tokens))
     }
 
-    fn pterm_sub<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Term, ParseError>
+    fn pterm_varname_or_indexer_or_sub<Tokens>(
+        &self,
+        tokens: &mut Peekable<Tokens>,
+    ) -> Result<Term, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
-        let sub = self.psubroutine_call(tokens)?;
-        Ok(Term::Call(sub))
+        let ident = self.pident(tokens)?;
+        match tokens.peek() {
+            Some(tok) => match tok.value {
+                TokenKind::Symbol(Symbol::LSqParen) => {
+                    let indexer = self.pindexer(tokens)?;
+                    Ok(Term::Indexer(ident, indexer))
+                }
+                TokenKind::Symbol(Symbol::LParen) => {
+                    let call = self.pfunc_call(tokens, ident)?;
+                    Ok(Term::Call(call))
+                }
+                TokenKind::Symbol(Symbol::Dot) => {
+                    let call = self.pmethod_call(tokens, ident)?;
+                    Ok(Term::Call(call))
+                }
+                _ => Ok(Term::VarName(ident)),
+            },
+            None => Err(self.eof()),
+        }
     }
 
     fn pterm_unary<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Term, ParseError>
@@ -64,7 +83,7 @@ impl Parser {
         Tokens: Iterator<Item = Token>,
     {
         let op = self.punary_op(tokens)?;
-        // todo: ここで左再帰おきるかも
+        // ここで左再帰おきるかと思ったら別にそんなことはなかった
         let term = self.pterm(tokens)?;
         Ok(Term::UnaryOp(op, Box::new(term)))
     }
@@ -130,23 +149,6 @@ impl Parser {
         Ok(Term::Keyword(key))
     }
 
-    fn pterm_varname<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Term, ParseError>
-    where
-        Tokens: Iterator<Item = Token>,
-    {
-        let var_name = self.pident(tokens)?;
-        Ok(Term::VarName(var_name))
-    }
-
-    fn pterm_indexer<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Term, ParseError>
-    where
-        Tokens: Iterator<Item = Token>,
-    {
-        let var_name = self.pident(tokens)?;
-        let indexer = self.pindexer(tokens)?;
-        Ok(Term::Indexer(var_name, indexer))
-    }
-
     fn pexpr_list<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<ExprList, ParseError>
     where
         Tokens: Iterator<Item = Token>,
@@ -209,9 +211,6 @@ impl Parser {
     {
         tokens.next();
         // name ( expr )
-        // todo: do hoge(); の形がパースできない
-        // pexpr_listで () を消費していることが原因か？
-        //let _ = self.skip_symbol(tokens, Symbol::LParen)?;
         let exprs = self.pexpr_list(tokens)?;
         let _ = self.skip_symbol(tokens, Symbol::RParen)?;
         Ok(SubRoutineCall::Func { name, exprs })
