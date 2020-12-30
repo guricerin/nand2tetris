@@ -1,8 +1,11 @@
-mod xml_ast;
-mod xml_token;
+mod vm;
+mod xml;
 
 use crate::lex;
 use crate::parse;
+use xml::xml_ast;
+use xml::xml_token;
+
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -21,6 +24,7 @@ pub enum CompileError {
 enum Mode {
     Lex,
     Parse,
+    Compile,
 }
 
 pub struct Engine {
@@ -57,28 +61,43 @@ impl Engine {
         Ok(())
     }
 
+    pub fn compile_to_vm(&self) -> Result<(), CompileError> {
+        for jack_file in self.jack_files.iter() {
+            let jack_code = fs::read_to_string(jack_file)?;
+            let tokens = lex::Lexer::new(jack_file).run(&jack_code)?;
+            let ast = parse::Parser::new(jack_file).run(tokens)?;
+            let vm_code = vm::translate(&ast);
+            let _ = self.write_file(jack_file, vm_code, Mode::Compile)?;
+        }
+        Ok(())
+    }
+
     fn write_file(
         &self,
         jack_file: &PathBuf,
         code: String,
         mode: Mode,
     ) -> Result<(), CompileError> {
-        let out_path = self.replace_path_to_output(jack_file, "xml", mode);
+        let out_path = self.replace_path_to_output(jack_file, mode);
         let mut writer = BufWriter::new(File::create(out_path)?);
         writer.write(code.as_bytes())?;
         Ok(())
     }
 
-    fn replace_path_to_output(&self, path: &PathBuf, ext: &str, mode: Mode) -> PathBuf {
+    fn replace_path_to_output(&self, path: &PathBuf, mode: Mode) -> PathBuf {
         let name = path.file_name().unwrap().to_str().unwrap();
         match mode {
             Mode::Lex => {
                 let name = name.replace(".jack", "T");
-                self.output_dir.join(name).with_extension(ext)
+                self.output_dir.join(name).with_extension("xml")
             }
             Mode::Parse => {
                 let name = name.replace(".jack", "");
-                self.output_dir.join(name).with_extension(ext)
+                self.output_dir.join(name).with_extension("xml")
+            }
+            Mode::Compile => {
+                let name = name.replace(".jack", "");
+                self.output_dir.join(name).with_extension("vm")
             }
         }
     }

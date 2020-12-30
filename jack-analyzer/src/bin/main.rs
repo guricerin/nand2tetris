@@ -19,6 +19,7 @@ struct Opts {
 enum Mode {
     Txml, // token to xml
     Axml, // ast to xml
+    C,    // compile to vm
 }
 
 fn main() -> Result<()> {
@@ -53,6 +54,9 @@ fn main() -> Result<()> {
         }
         Mode::Axml => {
             engine.parse_to_xml()?;
+        }
+        Mode::C => {
+            engine.compile_to_vm()?;
         }
     };
 

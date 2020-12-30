@@ -7,8 +7,8 @@
 
 class Square {
 
-   field int x, y; 
-   field int size; 
+   field int x, y;
+   field int size;
 
    constructor Square new(int Ax, int Ay, int Asize) {
       let x = Ax;
@@ -96,4 +96,4 @@ class Square {
       }
       return;
    }
-}  
+}
