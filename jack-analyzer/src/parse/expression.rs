@@ -1,17 +1,22 @@
 use super::*;
 
 impl Parser {
+    /// todo: let ident = ident - 1; を let ident = ident; とパースしてしまう
+    /// なぜか - が pterm_unaryにすわれている
+    /// やっぱ左再帰関係ある？
     pub fn pexpr<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Expr, ParseError>
     where
         Tokens: Iterator<Item = Token>,
     {
         let left = self.pterm(tokens)?;
-        let right = match self.pbinary_op(tokens) {
-            Ok(op) => match self.pterm(tokens) {
-                Ok(term) => Some((op, term)),
-                Err(e) => return Err(e),
-            },
-            Err(_) => None,
+        let right = {
+            match self.pbinary_op(tokens) {
+                Ok(op) => match self.pterm(tokens) {
+                    Ok(term) => Some((op, term)),
+                    Err(e) => return Err(e),
+                },
+                Err(_) => None,
+            }
         };
         let left = Box::new(left);
         let right = Box::new(right);
@@ -34,20 +39,20 @@ impl Parser {
     where
         Tokens: Iterator<Item = Token>,
     {
-        // クロージャだとmoveがおきてコンパイラに切れられるので、各自専用のメソッドを定義した
-        // let pterm_expr = |tokens| -> Result<Term, ParseError> {
-        //     let _ = self.skip_symbol(tokens, Symbol::LParen)?;
-        //     let sub = self.psubroutine_call(tokens)?;
-        //     let _ = self.skip_symbol(tokens, Symbol::RParen)?;
-        //     Ok(Term::Call(sub))
-        // };
-        self.pint_const(tokens)
-            .or(self.pstring_const(tokens))
-            .or(self.pkeyword_const(tokens))
-            // pterm_varnameでpidentを使ってidentを消費しているので、indexer, subcallとまとめる必要あり
-            .or(self.pterm_varname_or_indexer_or_sub(tokens))
-            .or(self.pterm_expr(tokens))
-            .or(self.pterm_unary(tokens))
+        match tokens.peek() {
+            Some(tok) => match tok.value {
+                TokenKind::Int(_) => self.pint_const(tokens),
+                TokenKind::String(_) => self.pstring_const(tokens),
+                TokenKind::Keyword(_) => self.pkeyword_const(tokens),
+                // pterm_varnameでpidentを使ってidentを消費しているので、indexer, subcallとまとめる必要あり
+                TokenKind::Ident(_) => self.pterm_varname_or_indexer_or_sub(tokens),
+                TokenKind::Symbol(Symbol::LParen) => self.pterm_expr(tokens),
+                TokenKind::Symbol(Symbol::Minus) => self.pterm_unary(tokens),
+                TokenKind::Symbol(Symbol::Tilde) => self.pterm_unary(tokens),
+                _ => Err(self.unexpected_token(tok.clone())),
+            },
+            _ => Err(self.eof()),
+        }
     }
 
     fn pterm_varname_or_indexer_or_sub<Tokens>(
