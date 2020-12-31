@@ -19,6 +19,8 @@ pub enum CompileError {
     Lex(#[from] lex::LexError),
     #[error(transparent)]
     Parse(#[from] parse::ParseError),
+    #[error(transparent)]
+    VmWrite(#[from] vm::VmWriteError),
 }
 
 enum Mode {
@@ -45,7 +47,7 @@ impl Engine {
             let jack_code = fs::read_to_string(jack_file)?;
             let tokens = lex::Lexer::new(jack_file).run(&jack_code)?;
             let xml = xml_token::translate(&tokens);
-            let _ = self.write_file(jack_file, xml, Mode::Lex)?;
+            self.write_file(jack_file, xml, Mode::Lex)?;
         }
         Ok(())
     }
@@ -56,7 +58,7 @@ impl Engine {
             let tokens = lex::Lexer::new(jack_file).run(&jack_code)?;
             let ast = parse::Parser::new(jack_file).run(tokens)?;
             let xml = xml_ast::translate(&ast);
-            let _ = self.write_file(jack_file, xml, Mode::Parse)?;
+            self.write_file(jack_file, xml, Mode::Parse)?;
         }
         Ok(())
     }
@@ -66,8 +68,8 @@ impl Engine {
             let jack_code = fs::read_to_string(jack_file)?;
             let tokens = lex::Lexer::new(jack_file).run(&jack_code)?;
             let ast = parse::Parser::new(jack_file).run(tokens)?;
-            let vm_code = vm::translate(&ast);
-            let _ = self.write_file(jack_file, vm_code, Mode::Compile)?;
+            let out_path = self.replace_path_to_output(jack_file, Mode::Compile);
+            vm::VmWriter::run(out_path, ast)?;
         }
         Ok(())
     }
