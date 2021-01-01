@@ -178,10 +178,15 @@ fn parse_segment(tok: &str) -> Result<Segment, ParseError> {
     Ok(seg)
 }
 
-// todo: 先頭の数値を許容してしまうので直せ
+// 先頭の数値を許容してしまうので直せ
+// 直したが、なぜ以下の正規表現が機能していないかいまだにわからん
 fn verify_label(label: &str) -> Result<(), ParseError> {
     use regex::Regex;
 
+    let head = label.as_bytes()[0];
+    if head.is_ascii_digit() {
+        return Err(ParseError::not_permit_label(label));
+    }
     let re = Regex::new(r"[a-zA-Z\.:_]+[0-9a-zA-Z\.:_]*").unwrap();
     if re.is_match(label) {
         Ok(())
@@ -224,6 +229,7 @@ fn parse_func(tokens: &Vec<&str>) -> Result<Command, ParseError> {
 fn parse_call(tokens: &Vec<&str>) -> Result<Command, ParseError> {
     let _ = check_tokens_num(tokens, 3)?;
     let label = tokens[1];
+    let _ = verify_label(label)?;
     let n = parse_num(tokens[2])?;
     let cmd = Command::call(label, n);
     Ok(cmd)
@@ -358,8 +364,8 @@ mod tests {
         let actual = parse(&input).unwrap();
         assert_eq!(actual, vec![Command::label(TEST_NAME)]);
 
-        // let actual = parse("label 0_w");
-        // assert!(actual.is_err(), "label head must be not number");
+        let actual = parse("label 0_w");
+        assert!(actual.is_err(), "label head must be not number");
     }
 
     #[test]
@@ -383,9 +389,9 @@ mod tests {
         let actual = parse(&input);
         assert!(actual.is_err(), "wrong number");
 
-        // let input = format!("function {} 0", "0:");
-        // let actual = parse(&input);
-        // assert!(actual.is_err(), "label head must be not number");
+        let input = format!("function {} 0", "0:");
+        let actual = parse(&input);
+        assert!(actual.is_err(), "label head must be not number");
     }
 
     #[test]
@@ -398,9 +404,9 @@ mod tests {
         let actual = parse(&input);
         assert!(actual.is_err(), "wrong number");
 
-        // let input = format!("call {} 0", "0:");
-        // let actual = parse(&input);
-        // assert!(actual.is_err(), "label head must be not number");
+        let input = format!("call {} 0", "0:");
+        let actual = parse(&input);
+        assert!(actual.is_err(), "label head must be not number");
     }
 
     #[test]
