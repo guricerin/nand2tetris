@@ -26,15 +26,6 @@ impl fmt::Display for SubRoutineModifier {
     }
 }
 
-impl ParamList {
-    pub fn count(&self) -> usize {
-        match &self.0 {
-            Some((_, ps)) => 1 + ps.len(),
-            None => 0,
-        }
-    }
-}
-
 impl ExprList {
     pub fn count(&self) -> usize {
         match &self.0 {

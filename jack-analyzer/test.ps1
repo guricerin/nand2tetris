@@ -78,6 +78,30 @@ function parse-xml-test($path) {
     }
 }
 
+function compile-test($path) {
+    $leaf = Split-Path $path -Leaf
+    $output_dir = Join-Path $PSScriptRoot "output/$leaf"
+    if (!(Test-Path $output_dir)) {
+        mkdir $output_dir
+    }
+    $jack_os_path = Join-Path $PSScriptRoot "../../tools/OS"
+    Get-ChildItem $jack_os_path -File | ForEach-Object {
+        $file = Split-Path $_ -Leaf
+        Copy-Item $_ $output_dir/$file
+    }
+
+    $target_dir = Join-Path $PSScriptRoot $path
+    $target_dir = Convert-Path $target_dir
+    $proc = Start-Process "cargo" -WorkingDirectory $PSScriptRoot -ArgumentList "run --release -- $target_dir -o $output_dir c" -Wait -PassThru
+    $res = $proc.ExitCode -eq 0
+    if ($res) {
+        $script:success += "  [o] compile_test: $target_dir"
+    }
+    else {
+        $script:fail += "  [x] compile_test: $target_dir"
+    }
+}
+
 function diff-test($target, $output) {
     # batファイルはこうやって実行させないと戻り値を取得できない
     return cmd.exe /c $DIFF_TOOL $target $output
@@ -102,6 +126,18 @@ function main() {
     ) | ForEach-Object {
         lex-xml-test $_
         parse-xml-test $_
+        compile-test $_
+    }
+
+    @(
+        "../11-compiler2-code-generation/Seven"
+        "../11-compiler2-code-generation/ConvertToBin"
+        "../11-compiler2-code-generation/Square"
+        "../11-compiler2-code-generation/Average"
+        "../11-compiler2-code-generation/Pong"
+        "../11-compiler2-code-generation/ComplexArrays"
+    ) | ForEach-Object {
+        compile-test $_
     }
 
     Write-Host
@@ -111,6 +147,7 @@ function main() {
     $script:fail | ForEach-Object {
         Write-Host "$_" -ForegroundColor Red
     }
+    Write-Host "Info: please check output vm code with the VMEmulator." -ForegroundColor Yellow
 }
 
 main

@@ -63,18 +63,12 @@ impl VmWriter {
     fn get(&self, s: &Ident) -> Option<&Record> {
         self.table.get(s)
     }
-    fn dbg_recode(&self, i: &Ident) {
-        let r = self.table.get(i);
-        println!("{:?}: {:?}", i, r)
-    }
 
     fn rclass_var_dec(&mut self, vardec: ClassVarDec) {
         let (ty, modifier) = (&vardec.ty, Kind::from(vardec.modifier));
         self.table.define(&vardec.name, &ty, &modifier);
-        //self.dbg_recode(&vardec.name);
         for name in vardec.names.iter() {
             self.table.define(name, &ty, &modifier);
-            //self.dbg_recode(&name);
         }
     }
     fn wsubroutine_dec(&mut self, vardec: SubRoutineDec) -> Result<(), VmWriteError> {
@@ -95,6 +89,7 @@ impl VmWriter {
             &self.table.varcount(&Kind::Var)
         ));
         match &vardec.modifier {
+            // slide.44 (https://drive.google.com/file/d/1DfGKr0fuJcCvlIPABNSg7fsLfFFqRLex/view)
             SubRoutineModifier::Constructor => {
                 // メモリ割り当て fieldの数
                 self.write(format!(
@@ -123,7 +118,6 @@ impl VmWriter {
                     &Type::Class(self.class_name.clone()),
                     &Kind::Arg,
                 );
-                //self.dbg_recode(&Ident("this".to_owned()));
             }
             _ => (),
         };
@@ -131,10 +125,8 @@ impl VmWriter {
             Some((p, ps)) => {
                 let kind = Kind::Arg;
                 self.table.define(&p.1, &p.0, &kind);
-                //self.dbg_recode(&p.1);
                 for p in ps.iter() {
                     self.table.define(&p.1, &p.0, &kind);
-                    //self.dbg_recode(&p.1);
                 }
             }
             None => (),
@@ -144,10 +136,8 @@ impl VmWriter {
     fn rsub_vardec(&mut self, vardec: &VarDec) {
         let kind = Kind::Var;
         self.table.define(&vardec.name, &vardec.ty, &kind);
-        //self.dbg_recode(&vardec.name);
         for name in vardec.names.iter() {
             self.table.define(name, &vardec.ty, &kind);
-            //self.dbg_recode(name);
         }
     }
     fn wsubroutine_body(&mut self, body: &SubRoutineBody) -> Result<(), VmWriteError> {
@@ -163,14 +153,10 @@ impl VmWriter {
         Ok(())
     }
     fn wstmt(&mut self, stmt: &Stmt) -> Result<(), VmWriteError> {
-        // ここからleft, right, nodeの順でコード化する
         match stmt {
             Stmt::Let { .. } => self.wlet_stmt(stmt)?,
-            // if goto if-goto label
             Stmt::If { .. } => self.wif_stmt(stmt)?,
-            // if goto if-goto label
             Stmt::While { .. } => self.wwhile_stmt(stmt)?,
-            // call
             Stmt::Do { .. } => {
                 self.wdo_stmt(stmt)?;
                 // 戻り値がvoidなのでstack topをtempセグメントにボッシュート
@@ -183,7 +169,6 @@ impl VmWriter {
     /// P.260
     fn wif_stmt(&mut self, stmt: &Stmt) -> Result<(), VmWriteError> {
         match stmt {
-            // if goto if-goto label
             Stmt::If { cond, conseq, alt } => {
                 let else_label = format!("IF_ELSE_{}", self.goto_label_id);
                 let break_label = format!("IF_BREAK_{}", self.goto_label_id);
@@ -207,7 +192,6 @@ impl VmWriter {
     /// P.260
     fn wwhile_stmt(&mut self, stmt: &Stmt) -> Result<(), VmWriteError> {
         match stmt {
-            // if goto if-goto label
             Stmt::While { cond, body } => {
                 let loop_label = format!("WHILE_LOOP_{}", self.goto_label_id);
                 let break_label = format!("WHILE_BREAK_{}", self.goto_label_id);
@@ -242,18 +226,36 @@ impl VmWriter {
 
                 // rhsの結果がpushされるはず
                 self.wexpr(expr)?;
-                println!("{:?}", &expr);
                 // 結果をlhsに代入
                 self.write(format!("    pop {} {}\n", lhs.kind, lhs.id));
             }
+            // slide.73 (https://drive.google.com/file/d/1DfGKr0fuJcCvlIPABNSg7fsLfFFqRLex/view)
+            // let var_name[idx] = expr
             Stmt::Let {
                 var_name,
                 indexer: Some(idx),
                 expr,
             } => {
-                // P.235
+                let lhs = match self.get(var_name) {
+                    Some(r) => r.clone(),
+                    None => return Err(self.undefined_symbol(var_name)),
+                };
+
+                // slideとは違い、rhsから計算した
+                // top = expr
                 self.wexpr(expr)?;
-                self.windexer(var_name, idx)?;
+                // temp[1] = expr
+                self.write("    pop temp 1\n");
+
+                // top = var_name + idx
+                self.write(format!("    push {} {}\n", &lhs.kind, &lhs.id));
+                self.wexpr(idx)?;
+                self.write("    add\n");
+                // pointer -> that segment
+                self.write("    pop pointer 1\n");
+                // top = expr
+                self.write("    push temp 1\n");
+                // *(var_name + idx) = expr
                 self.write("    pop that 0\n");
             }
             _ => unreachable!(),
@@ -300,8 +302,14 @@ impl VmWriter {
                 self.write(format!("    push constant {}\n", n));
             }
             Term::StringConst(s) => {
-                // todo: わからん
-                self.write("    call String.new 0\n");
+                // P.212
+                let s = s.as_bytes();
+                self.write(format!("    push constant {}\n", s.len()));
+                self.write("    call String.new 1\n");
+                for c in s.iter() {
+                    self.write(format!("    push constant {}\n", c));
+                    self.write("    call String.appendChar 2\n");
+                }
             }
             Term::Keyword(k) => {
                 self.wkeyword(k)?;
@@ -390,22 +398,24 @@ impl VmWriter {
         }
         Ok(())
     }
-    /// todo: thatセグメントとか誰も使ってないからなおせ
+    /// 配列への代入ではなく、値の取得を想定
+    /// slide.73 (https://drive.google.com/file/d/1DfGKr0fuJcCvlIPABNSg7fsLfFFqRLex/view)
     fn windexer(&mut self, base: &Ident, idx: &Expr) -> Result<(), VmWriteError> {
         let base = match self.get(base) {
             Some(r) => r.clone(),
             None => return Err(self.undefined_symbol(base)),
         };
         // base[idx] -> base + idx
-        self.wexpr(idx)?;
         self.write(format!("    push {} {}\n", &base.kind, &base.id));
+        self.wexpr(idx)?;
         self.write("    add\n");
         // pointer -> that segment
         self.write("    pop pointer 1\n");
-        // これでいいか？
+        // top = *(base + idx)
         self.write("    push that 0\n");
         Ok(())
     }
+    /// P.263
     fn wkeyword(&mut self, k: &KeywordConst) -> Result<(), VmWriteError> {
         match k {
             KeywordConst::True => {
@@ -417,7 +427,6 @@ impl VmWriter {
                 self.write("    push constant 0\n");
             }
             KeywordConst::This => {
-                // todo: たぶんこれでいい
                 self.write("    push pointer 0\n");
             }
         };

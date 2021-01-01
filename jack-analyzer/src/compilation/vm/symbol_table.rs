@@ -107,10 +107,6 @@ impl SymbolTable {
     }
 
     pub fn varcount(&self, kind: &Kind) -> u64 {
-        // match kind {
-        //     Kind::Static | Kind::Field => self.class_table.count(kind),
-        //     Kind::Arg | Kind::Var => self.subroutine_table.count(kind),
-        // }
         self.class_table.count(kind) + self.subroutine_table.count(kind)
     }
 
