@@ -2,7 +2,6 @@ mod ast_ex;
 mod symbol_table;
 
 use crate::parse::ast::*;
-use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -23,20 +22,6 @@ pub struct VmWriter {
     table: SymbolTable,
     class_name: Ident,
     goto_label_id: u64,
-}
-
-enum StackOp {
-    Push,
-    Pop,
-}
-
-impl fmt::Display for StackOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            StackOp::Push => write!(f, "push"),
-            StackOp::Pop => write!(f, "pop"),
-        }
-    }
 }
 
 impl VmWriter {
@@ -82,75 +67,94 @@ impl VmWriter {
         let r = self.table.get(i);
         println!("{:?}: {:?}", i, r)
     }
-    // フィールドのn番目の値に引数の1番目の値をセットする例：``push argument 1  pop this n``
-    fn access_field(&mut self) {
-        self.write("pop pointer 0\n");
-    }
 
     fn rclass_var_dec(&mut self, vardec: ClassVarDec) {
         let (ty, modifier) = (&vardec.ty, Kind::from(vardec.modifier));
         self.table.define(&vardec.name, &ty, &modifier);
-        self.dbg_recode(&vardec.name);
+        //self.dbg_recode(&vardec.name);
         for name in vardec.names.iter() {
             self.table.define(name, &ty, &modifier);
-            self.dbg_recode(&name);
+            //self.dbg_recode(&name);
         }
     }
     fn wsubroutine_dec(&mut self, vardec: SubRoutineDec) -> Result<(), VmWriteError> {
         self.table.start_subroutine();
-        self.rparams(&vardec.params);
-
+        // 引数を記録
+        self.rparams(&vardec.params, &vardec.modifier);
+        // ローカル変数を記録
+        for vardec in vardec.body.vardecs.iter() {
+            self.rsub_vardec(vardec);
+        }
         // function start
         self.write(format!(
             "{} {}.{} {}\n",
             &vardec.modifier,
             &self.class_name,
             &vardec.name,
-            &vardec.params.count()
+            // ローカル変数の数 P.147
+            &self.table.varcount(&Kind::Var)
         ));
+        match &vardec.modifier {
+            SubRoutineModifier::Constructor => {
+                // メモリ割り当て fieldの数
+                self.write(format!(
+                    "    push constant {}\n",
+                    &self.table.varcount(&Kind::Field)
+                ));
+                self.write("    call Memory.alloc 1\n");
+                self.write("    pop pointer 0\n");
+            }
+            SubRoutineModifier::Method => {
+                self.write("    push argument 0\n");
+                self.write("    pop pointer 0\n");
+            }
+            _ => (),
+        };
         self.wsubroutine_body(&vardec.body)?;
         Ok(())
     }
     /// サブルーチンの引数
-    fn rparams(&mut self, params: &ParamList) {
-        // P.265 thisを暗黙の引数として登録
-        self.table.define(
-            &Ident("this".to_owned()),
-            &Type::Class(self.class_name.clone()),
-            &Kind::Arg,
-        );
-        self.dbg_recode(&Ident("this".to_owned()));
+    fn rparams(&mut self, params: &ParamList, modifier: &SubRoutineModifier) {
+        match modifier {
+            SubRoutineModifier::Method => {
+                // P.265 thisを暗黙の引数として登録
+                self.table.define(
+                    &Ident("this".to_owned()),
+                    &Type::Class(self.class_name.clone()),
+                    &Kind::Arg,
+                );
+                //self.dbg_recode(&Ident("this".to_owned()));
+            }
+            _ => (),
+        };
         match &params.0 {
             Some((p, ps)) => {
                 let kind = Kind::Arg;
                 self.table.define(&p.1, &p.0, &kind);
-                self.dbg_recode(&p.1);
+                //self.dbg_recode(&p.1);
                 for p in ps.iter() {
                     self.table.define(&p.1, &p.0, &kind);
-                    self.dbg_recode(&p.1);
+                    //self.dbg_recode(&p.1);
                 }
             }
             None => (),
         };
     }
-    fn wsubroutine_body(&mut self, body: &SubRoutineBody) -> Result<(), VmWriteError> {
-        for vardec in body.vardecs.iter() {
-            self.rsub_vardec(vardec);
+    /// サブルーチンのローカル変数宣言
+    fn rsub_vardec(&mut self, vardec: &VarDec) {
+        let kind = Kind::Var;
+        self.table.define(&vardec.name, &vardec.ty, &kind);
+        //self.dbg_recode(&vardec.name);
+        for name in vardec.names.iter() {
+            self.table.define(name, &vardec.ty, &kind);
+            //self.dbg_recode(name);
         }
+    }
+    fn wsubroutine_body(&mut self, body: &SubRoutineBody) -> Result<(), VmWriteError> {
         for stmt in body.stmts.0.iter() {
             self.wstmt(stmt)?;
         }
         Ok(())
-    }
-    /// サブルーチンのローカル変数宣言
-    fn rsub_vardec(&mut self, vardec: &VarDec) {
-        let kind = Kind::Var; // たぶんArgじゃない。Varは関数内のローカル変数だから。
-        self.table.define(&vardec.name, &vardec.ty, &kind);
-        self.dbg_recode(&vardec.name);
-        for name in vardec.names.iter() {
-            self.table.define(name, &vardec.ty, &kind);
-            self.dbg_recode(name);
-        }
     }
     fn wstmts(&mut self, stmts: &Stmts) -> Result<(), VmWriteError> {
         for stmt in stmts.0.iter() {
@@ -167,7 +171,11 @@ impl VmWriter {
             // if goto if-goto label
             Stmt::While { .. } => self.wwhile_stmt(stmt)?,
             // call
-            Stmt::Do { .. } => self.wdo_stmt(stmt)?,
+            Stmt::Do { .. } => {
+                self.wdo_stmt(stmt)?;
+                // 戻り値がvoidなのでstack topをtempセグメントにボッシュート
+                self.write("    pop temp 0\n");
+            }
             Stmt::Return { .. } => self.wreturn_stmt(stmt)?,
         };
         Ok(())
@@ -234,6 +242,7 @@ impl VmWriter {
 
                 // rhsの結果がpushされるはず
                 self.wexpr(expr)?;
+                println!("{:?}", &expr);
                 // 結果をlhsに代入
                 self.write(format!("    pop {} {}\n", lhs.kind, lhs.id));
             }
@@ -254,8 +263,8 @@ impl VmWriter {
     fn wdo_stmt(&mut self, stmt: &Stmt) -> Result<(), VmWriteError> {
         match stmt {
             Stmt::Do { subroutine_call } => match subroutine_call {
-                SubRoutineCall::Func { .. } => self.wfunc_call(subroutine_call, true)?,
-                SubRoutineCall::Method { .. } => self.wmethod_call(subroutine_call, true)?,
+                SubRoutineCall::Func { .. } => self.wfunc_call(subroutine_call)?,
+                SubRoutineCall::Method { .. } => self.wmethod_call(subroutine_call)?,
             },
             _ => unreachable!(),
         }
@@ -310,8 +319,8 @@ impl VmWriter {
                 self.windexer(s, expr)?;
             }
             Term::Call(sub) => match sub {
-                SubRoutineCall::Func { .. } => self.wfunc_call(sub, false)?,
-                SubRoutineCall::Method { .. } => self.wmethod_call(sub, false)?,
+                SubRoutineCall::Func { .. } => self.wfunc_call(sub)?,
+                SubRoutineCall::Method { .. } => self.wmethod_call(sub)?,
             },
             Term::Expr(expr) => {
                 self.wexpr(expr)?;
@@ -323,28 +332,25 @@ impl VmWriter {
         }
         Ok(())
     }
-    /// 戻り値がvoidのfunc or method はcallしたあとpopしなければならないが、どうやってvoidかどうかを判定する？
-    /// => do文で使われたかで判定する
-    fn wfunc_call(&mut self, f: &SubRoutineCall, is_void: bool) -> Result<(), VmWriteError> {
+    fn wfunc_call(&mut self, f: &SubRoutineCall) -> Result<(), VmWriteError> {
         match f {
             SubRoutineCall::Func { name, exprs } => {
                 // 引数をargmumentからpushしておく
                 // selfを始めにpushする
-                self.write("    pop pointer 0\n");
-                self.write("    push this 0\n");
-
+                self.write("    push pointer 0\n");
                 self.wexpr_list(exprs)?; // 実引数
-                self.write(format!("    call {} {}\n", name, exprs.count() + 1));
-                if is_void {
-                    // tempセグメントをゴミ箱として扱う
-                    self.write("    pop temp 0\n");
-                }
+                self.write(format!(
+                    "    call {}.{} {}\n",
+                    &self.class_name,
+                    name,
+                    exprs.count() + 1
+                ));
             }
             _ => unreachable!(),
         }
         Ok(())
     }
-    fn wmethod_call(&mut self, f: &SubRoutineCall, is_void: bool) -> Result<(), VmWriteError> {
+    fn wmethod_call(&mut self, f: &SubRoutineCall) -> Result<(), VmWriteError> {
         match f {
             SubRoutineCall::Method {
                 reciever,
@@ -352,17 +358,21 @@ impl VmWriter {
                 exprs,
             } => {
                 // 引数をpushしておく
-                self.wexpr_list(exprs)?; // 実引数
-                self.write(format!(
-                    "    call {}.{} {}\n",
-                    reciever,
-                    name,
-                    exprs.count()
-                ));
-                if is_void {
-                    // tempセグメントをゴミ箱として扱う
-                    self.write("    pop temp 0\n");
-                }
+                // recieverを先にpush
+                let (ty, c) = match self.get(reciever) {
+                    // インスタンス名
+                    Some(r) => {
+                        let obj = r.clone();
+                        self.write(format!("    push {} {}\n", obj.kind, obj.id));
+                        (obj.ty, 1)
+                    }
+                    // クラス名（型名）
+                    _ => (Type::Class(reciever.clone()), 0),
+                };
+                // 実引数
+                self.wexpr_list(exprs)?;
+                // reciever.method じゃなくて Type.method
+                self.write(format!("    call {}.{} {}\n", ty, name, exprs.count() + c));
             }
             _ => unreachable!(),
         }
@@ -392,22 +402,23 @@ impl VmWriter {
         self.write("    add\n");
         // pointer -> that segment
         self.write("    pop pointer 1\n");
+        // これでいいか？
+        self.write("    push that 0\n");
         Ok(())
     }
     fn wkeyword(&mut self, k: &KeywordConst) -> Result<(), VmWriteError> {
         match k {
             KeywordConst::True => {
                 // -1
-                self.write("    push constant 1\nneg\n");
+                self.write("    push constant 1\n    neg\n");
             }
             KeywordConst::False | KeywordConst::Null => {
                 // 0
                 self.write("    push constant 0\n");
             }
             KeywordConst::This => {
-                // todo: selfの指し方がわからん
-                self.write("    pop pointer 0\n");
-                self.write("    push this 0\n");
+                // todo: たぶんこれでいい
+                self.write("    push pointer 0\n");
             }
         };
         Ok(())
