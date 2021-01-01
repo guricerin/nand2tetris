@@ -1,9 +1,6 @@
 use super::*;
 
 impl Parser {
-    /// todo: let ident = ident - 1; を let ident = ident; とパースしてしまう
-    /// なぜか - が pterm_unaryにすわれている
-    /// やっぱ左再帰関係ある？
     pub fn pexpr<Tokens>(&self, tokens: &mut Peekable<Tokens>) -> Result<Expr, ParseError>
     where
         Tokens: Iterator<Item = Token>,
