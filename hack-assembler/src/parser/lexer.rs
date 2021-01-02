@@ -127,11 +127,11 @@ fn lex_number(input: &[u8], start: usize) -> Result<(Token, usize), LexError> {
 }
 
 fn available_char_in_ident_head(c: char) -> bool {
-    c.is_ascii_alphabetic() || c == '_' || c == '$' || c == ':'
+    c.is_ascii_alphabetic() || c == '_' || c == '$' || c == ':' || c == '.'
 }
 
 fn available_char_in_ident(c: char) -> bool {
-    c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_' || c == '$' || c == ':'
+    c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_' || c == '$' || c == ':' || c == '.'
 }
 
 fn lex_ident(input: &[u8], start: usize) -> Result<(Token, usize), LexError> {

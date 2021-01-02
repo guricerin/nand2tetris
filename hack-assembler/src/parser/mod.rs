@@ -43,7 +43,6 @@ pub fn parse(tokens: Vec<Token>) -> Result<Commands, ParseError> {
             TokenKind::LParen => parse_a_token!(parse_lcommand(&tokens, pos)),
             // C command
             _ => parse_a_token!(parse_ccommand(&tokens, pos)),
-            // _ => return Err(ParseError::UnexpectedToken(tokens[pos].clone())),
         }
     }
 
@@ -119,7 +118,6 @@ fn parse_roperand(tokens: &Vec<Token>, start: usize) -> Result<(Operand, usize),
     let mut pos = start;
     let _ = check_eof(tokens, pos)?;
     let operand = match tokens[pos].value.clone() {
-        // todo: D,A,Mのみ受理
         TokenKind::Mem(m) => Operand::mem(m),
         TokenKind::Number(n) => match Constant::new(n) {
             Some(c) => Operand::constant(c),
