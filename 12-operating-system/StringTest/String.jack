@@ -11,54 +11,129 @@
  * string-oriented operations.
  */
 class String {
+    field Array _value;
+    field int _len;
 
     /** constructs a new empty string with a maximum length of maxLength
      *  and initial length of 0. */
     constructor String new(int maxLength) {
+        if (maxLength < 1) {
+            let maxLength = 1;
+        }
+        let _value = Array.new(maxLength);
+        let _len = 0;
+        return this;
     }
 
     /** Disposes this string. */
     method void dispose() {
+        do _value.dispose();
+        return;
     }
 
     /** Returns the current length of this string. */
     method int length() {
+        return _len;
     }
 
     /** Returns the character at the j-th location of this string. */
     method char charAt(int j) {
+        return _value[j];
     }
 
     /** Sets the character at the j-th location of this string to c. */
     method void setCharAt(int j, char c) {
+        let _value[j] = c;
+        return;
     }
 
     /** Appends c to this string's end and returns this string. */
     method String appendChar(char c) {
+        let _value[_len] = c;
+        let _len = _len + 1;
+        return this;
     }
 
     /** Erases the last character from this string. */
     method void eraseLastChar() {
+        if (_len > 0) {
+            let _len = _len - 1;
+        }
+        return;
     }
 
-    /** Returns the integer value of this string, 
+    /** Returns the integer value of this string,
      *  until a non-digit character is detected. */
     method int intValue() {
+        var int res, i;
+        var boolean neg;
+        let res = 0;
+        let i = 0;
+        let neg = false;
+        // -
+        if (_value[0] = 45) {
+            let neg = true;
+            let i = i + 1;
+        }
+        while ((i < _len) & String.isAsciiDigit(_value[i])) {
+            let res = (res * 10) + (String.char2Int(_value[i]));
+            let i = i + 1;
+        }
+        if (neg) {
+            let res = -res;
+        }
+        return res;
     }
 
     /** Sets this string to hold a representation of the given value. */
     method void setInt(int val) {
+        let _len = 0;
+        if (val < 0) {
+            // -
+            do appendChar(45);
+            let val = Math.abs(val);
+        }
+        do int2String(val);
+        return;
+    }
+
+    method void int2String(int n) {
+        var int lastDigit;
+        var char c;
+        let lastDigit = n - ((n / 10) * 10); // n % 10
+        let c = String.int2Char(lastDigit);
+        if (n < 10) {
+            do appendChar(c);
+        } else {
+            do int2String(n / 10);
+            do appendChar(c);
+        }
+        return;
+    }
+
+    /** 1桁の数値をcharに変換 */
+    function char int2Char(int d) {
+        return d + 48;
+    }
+    function int char2Int(int c) {
+        return c - 48;
+    }
+    function boolean isAsciiDigit(char c) {
+        return ((47 < c) & (c < 57));
     }
 
     /** Returns the new line character. */
     function char newLine() {
+        return 128;
     }
 
     /** Returns the backspace character. */
     function char backSpace() {
+        return 129;
     }
 
     /** Returns the double quote (") character. */
     function char doubleQuote() {
+        return 34;
     }
 }
