@@ -7,28 +7,75 @@
  * This library provides two services: direct access to the computer's main
  * memory (RAM), and allocation and recycling of memory blocks. The Hack RAM
  * consists of 32,768 words, each holding a 16-bit binary number.
- */ 
+ */
 class Memory {
+    static Array _ram;
+    static Array _freeList;
+    static int HEAP_BASE;
+    static int _heapLen;
+    static int LEN;
+    static int NEXT;
 
     /** Initializes the class. */
     function void init() {
+        let _ram = 0;
+        let HEAP_BASE = 2048;
+        let _heapLen = 16383 - HEAP_BASE;
+        let LEN = 0;
+        let NEXT = 1;
+
+        let _freeList = HEAP_BASE;
+        let _freeList[LEN] = _heapLen;
+        let _freeList[NEXT] = null;
+        return;
     }
 
     /** Returns the RAM value at the given address. */
     function int peek(int address) {
+        return _ram[address];
     }
 
     /** Sets the RAM value at the given address to the given value. */
     function void poke(int address, int value) {
+        let _ram[address] = value;
+        return;
     }
 
     /** Finds an available RAM block of the given size and returns
      *  a reference to its base address. */
     function int alloc(int size) {
+        var Array cutPtr, prevPtr, nextPtr, block;
+        var int nextLen;
+        let cutPtr = _freeList;
+        let prevPtr = cutPtr;
+
+        while (~(cutPtr[LEN] > size)) {
+            let prevPtr = cutPtr;
+            let cutPtr = cutPtr[NEXT];
+            if (cutPtr = null) {
+                return null;
+            }
+        }
+
+        let block = cutPtr + cutPtr[LEN] - size;
+        // block（確保した領域）に余裕がなければfreeListから外す
+        if (cutPtr[LEN] < (size + 3)) {
+            let prevPtr[NEXT] = cutPtr[NEXT];
+        }
+        let cutPtr[LEN] = cutPtr[LEN] - (size + 1);
+        let block[-1] = size + 1;
+        return block;
     }
 
     /** De-allocates the given object (cast as an array) by making
      *  it available for future allocations. */
     function void deAlloc(Array o) {
-    }    
+        var Array block;
+        // 開放した領域を先頭にもってくる
+        let block = o - 1;
+        let block[LEN] = o[-1];
+        let block[NEXT] = _freeList[NEXT];
+        let _freeList[NEXT] = block;
+        return;
+    }
 }

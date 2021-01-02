@@ -37,6 +37,7 @@ class Screen {
     function void clearScreen() {
         var int i;
         let i = _ramStart;
+        // 右の余分なかっこを消すとなぜかdrawPixelで無効なメモリ領域を参照してしまう
         while (i < _ramEnd)) {
             // 白
             do Memory.poke(i, false);
