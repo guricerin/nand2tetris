@@ -1,6 +1,4 @@
 *.out
-*.tst
-*.cmp
 *.hack
 
 07-vm1-stack-arithmetic/**/*.asm
